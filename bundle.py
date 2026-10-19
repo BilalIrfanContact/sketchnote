@@ -102,17 +102,11 @@ def make_marks(events, words, duration):
 
 def summary(bundle_dir, duration, target, marks, mode):
     where = f'{target["app"]} "{target["title"]}"' if target else f'the {mode}'
-    activity = target['app'] if target else f'the {mode}'
     tags = {'click': '[clicked] ', 'pin': '[pin] '}
-    lines = [f'[sketchnote {clock(duration)} · {where} · {bundle_dir}]',
-             f'Cropped to: the activity in {activity} (full frames in frames-full/)']
+    lines = [f'[sketchnote {clock(duration)} · {where} · {bundle_dir}]']
     for m in marks:
         said = f'“{m["text"]}”' if m['text'] else ''
         lines.append(f'- #{m["n"]} ({clock(m["t"])}) {tags.get(m["type"], "")}{said}'.rstrip())
-    sheet = os.path.join(bundle_dir, 'contact-sheet.png')
-    data = os.path.join(bundle_dir, 'sketchnote.json')
-    lines += ['', f'The contact sheet is attached ({sheet}); read {data} for timestamped '
-                  'transcript, marks, and interactions.']
     return '\n'.join(lines) + '\n'
 
 

@@ -63,14 +63,12 @@ Each capture is a folder `~/.local/share/sketchnote/captures/<timestamp>.bundle/
 
 ```
 [sketchnote 0:31 · Text Editor "notes.txt" · /home/you/.local/share/sketchnote/captures/2026-10-19_21-10-00.bundle]
-Cropped to: the activity in Text Editor (full frames in frames-full/)
 - #1 (0:04) “This footer has too much text, let's cut it down”
 - #2 (0:10) “and the model name here is out of date”
 - #3 (0:11) [clicked] “this button should open the settings instead”
-...
-
-The contact sheet is attached (…/contact-sheet.png); read …/sketchnote.json for timestamped transcript, marks, and interactions.
 ```
+
+The header's path is the bundle folder, so an agent with file access can also open `sketchnote.json` and `frames-full/` from there.
 
 ## How it's built
 
