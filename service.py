@@ -83,11 +83,15 @@ class Service:
             n = sum(1 for _ in os.scandir(os.path.join(bundle_dir, 'frames')))
             notify('Sketchnote ready', f'{n} notes · Alt+Shift+V pastes the text, '
                                        'Alt+Shift+I the contact sheet')
-            GLib.idle_add(self.conn.emit_signal, None, PATH, NAME, 'BundleReady',
-                          GLib.Variant('(s)', (bundle_dir,)))
+            GLib.idle_add(self.emit_ready, bundle_dir)
         except Exception:
             traceback.print_exc()
             notify('Sketchnote failed', f'Could not build {bundle_dir}; see the journal')
+
+    def emit_ready(self, bundle_dir):
+        """Main-loop half of build(): tells the extension, once, that the bundle is done."""
+        self.conn.emit_signal(None, PATH, NAME, 'BundleReady', GLib.Variant('(s)', (bundle_dir,)))
+        return GLib.SOURCE_REMOVE
 
     def cancel(self):
         self.stop_mic()
