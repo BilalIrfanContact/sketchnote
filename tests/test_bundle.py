@@ -29,9 +29,7 @@ class Marks(unittest.TestCase):
 
     def test_summary_format(self):
         marks = bundle.make_marks([{'type': 'click', 't': 16, 'x': 0, 'y': 0}], [W('hi', 16.5)], 60)
-        text = bundle.summary('/b', 60, {'app': 'Firefox', 'title': 'Docs'}, marks, 'screen')
-        self.assertEqual(text, '[sketchnote 1:00 · Firefox "Docs" · /b]\n'
-                               '- #1 (0:16) [clicked] “hi”\n')
+        self.assertEqual(bundle.summary(marks), '- #1 (0:16) [clicked] “hi”\n')
 
 
 class Geometry(unittest.TestCase):

@@ -291,7 +291,7 @@ def check_paste(inp, bundle_dir, procs):
                                   env=dict(os.environ, WAYLAND_DISPLAY=DISPLAY, GDK_BACKEND='wayland')))
     time.sleep(3)
     lines = lambda: open(log).read().splitlines()  # noqa: E731
-    header = 'text ' + open(f'{bundle_dir}/summary.md').read().splitlines()[0]
+    notes = 'text ' + open(f'{bundle_dir}/summary.md').read().splitlines()[0]
     image = 'image {}x{}'.format(*Image.open(f'{bundle_dir}/contact-sheet.png').size)
 
     inp.combo('ctrl', 'v')
@@ -304,7 +304,7 @@ def check_paste(inp, bundle_dir, procs):
     wait_for(lambda: len(lines()) >= 5, 'a plain Ctrl+V', timeout=10)
     time.sleep(1)
     print('\n== pastes\n' + '\n'.join(lines()))
-    assert lines() == [header, image, header, image, 'text other'], lines()
+    assert lines() == [notes, image, notes, image, 'text other'], lines()
 
 
 def finish_button(path):

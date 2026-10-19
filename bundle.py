@@ -63,7 +63,7 @@ def build(bundle_dir, capture, audio_t0_us):
 
     target = main_target(capture)
     with open(os.path.join(bundle_dir, 'summary.md'), 'w') as f:
-        f.write(summary(bundle_dir, duration, target, marks, capture['mode']))
+        f.write(summary(marks))
     with open(os.path.join(bundle_dir, 'sketchnote.json'), 'w') as f:
         json.dump({'duration': duration, 'mode': capture['mode'], 'area': capture['area'],
                    'target': target, 'video_offset': video_offset,
@@ -100,10 +100,9 @@ def make_marks(events, words, duration):
     return marks
 
 
-def summary(bundle_dir, duration, target, marks, mode):
-    where = f'{target["app"]} "{target["title"]}"' if target else f'the {mode}'
+def summary(marks):
     tags = {'click': '[clicked] ', 'pin': '[pin] '}
-    lines = [f'[sketchnote {clock(duration)} · {where} · {bundle_dir}]']
+    lines = []
     for m in marks:
         said = f'“{m["text"]}”' if m['text'] else ''
         lines.append(f'- #{m["n"]} ({clock(m["t"])}) {tags.get(m["type"], "")}{said}'.rstrip())
