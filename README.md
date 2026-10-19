@@ -12,16 +12,15 @@ then paste the result into your agent. A Linux (GNOME 50, Wayland) take on
 
 Then **log out and back in once**. GNOME on Wayland only discovers new extensions at login.
 
-`install.sh` does four things:
+`install.sh` does three things:
 
 - Creates `.venv` with faster-whisper and downloads the `small` model.
 - Symlinks `extension/sketchnote@local` into `~/.local/share/gnome-shell/extensions/` and enables it.
 - Writes a D-Bus activation file so the service starts on demand.
-- Adds two GNOME custom shortcuts for pasting.
 
 It is safe to re-run.
 
-Requirements, all present on Ubuntu with GNOME 50: `ffmpeg` (with libx264), `pw-record`, `wl-copy`, `notify-send`, and python3 with PyGObject and Pillow.
+Requirements, all present on Ubuntu with GNOME 50: `ffmpeg` (with libx264), `pw-record`, `notify-send`, and python3 with PyGObject and Pillow.
 
 ## Use
 
@@ -33,8 +32,8 @@ Requirements, all present on Ubuntu with GNOME 50: `ffmpeg` (with libx264), `pw-
 | click | Logged as a click (blue ring in the output) |
 | Ctrl+Z | Undo the last stroke or pin |
 | Esc | Cancel and throw the capture away |
-| Alt+Shift+V | Copy the latest capture's notes (`summary.md`) to the clipboard |
-| Alt+Shift+I | Copy the latest capture's contact sheet (PNG) to the clipboard |
+| Ctrl+V | Right after a capture is ready: paste its notes and contact sheet together |
+| Alt+Shift+V | Paste the latest capture's notes and contact sheet, any time |
 
 Starting a capture records the whole screen and the microphone immediately. While it runs:
 
@@ -42,9 +41,9 @@ Starting a capture records the whole screen and the microphone immediately. Whil
 - A stop icon appears in the top bar.
 - A pill at top centre shows the timer and **Area / Window / Screen** for 3 seconds. Picking **Window** or **Area** restarts the capture on that target, and Area lets you drag a rectangle. The pill then switches to **Undo / Cancel / Finish**.
 
-After Finish, the capture is transcribed locally, which takes about 20 s for 30 s of speech on CPU. A notification says when it's ready. Then press Alt+Shift+V in your agent's input box and Ctrl+V to paste the notes. Press Alt+Shift+I and Ctrl+V to attach the contact sheet. Wayland doesn't let apps type into other windows, so pasting is always your Ctrl+V.
+After Finish, the capture is transcribed locally, which takes about 20 s for 30 s of speech on CPU. A notification says when it's ready, and the notes are now on the clipboard. Press Ctrl+V in your agent's input box: the extension pastes the notes, swaps the clipboard to the contact sheet and pastes again, so you get the text and the image from one key press. Each is an ordinary paste, so this works in any app that accepts pasted text and images. Once you copy something else, Ctrl+V is normal again; Alt+Shift+V pastes the latest capture whenever you want it back.
 
-CLI: `./sketchnote paste-text | paste-image | latest | service`.
+CLI: `./sketchnote latest | service`.
 
 ## Output
 
@@ -57,7 +56,7 @@ Each capture is a folder `~/.local/share/sketchnote/captures/<timestamp>.bundle/
 | `frames/frame-NN.png` | Keyframe per mark, cropped to the activity, annotations burned in |
 | `frames-full/frame-NN.png` | The same keyframes uncropped |
 | `contact-sheet.png` | Cropped keyframes in a two-column grid with number badges |
-| `summary.md` | The handoff text, copied by Alt+Shift+V |
+| `summary.md` | The handoff text, pasted by Ctrl+V or Alt+Shift+V |
 | `sketchnote.json` | Timings, strokes, clicks, pins, target window, word timestamps, marks |
 
 `summary.md` looks like this:
@@ -87,7 +86,8 @@ To rename, change `sketchnote`/`org.sketchnote` in those files, the extension uu
 
 These are the simplest options, picked deliberately. Change them freely.
 
-- **Hotkeys.** Scrawl's ⌥⇧S / ⌥⇧V become Alt+Shift+S / Alt+Shift+V. There's no single paste for text plus image on Wayland, so the image gets its own key, Alt+Shift+I. Hotkeys are constants at the top of `extension.js` and in `install.sh`. There's no settings UI.
+- **Hotkeys.** Scrawl's ⌥⇧S / ⌥⇧V become Alt+Shift+S / Alt+Shift+V. Hotkeys are constants at the top of `extension.js`. There's no settings UI.
+- **Pasting text and image together.** A clipboard holds one thing that apps reliably paste, so the extension pastes twice: notes first, then the contact sheet, 0.4 s apart. Alt+Shift+V waits until you release Alt and Shift, otherwise the app would see Ctrl+Alt+Shift+V.
 - **Mode picker.** It shows for 3 s. Picking Window uses the window that was focused when you pressed the hotkey. Picking Window or Area restarts the capture, so the timer resets. There's no iPhone mode.
 - **Marks.** Every stroke, click and pin is its own mark; nothing is merged. Each mark gets the words spoken from its start until the next mark. Words spoken before the first mark go to #1. With no marks, the whole capture is one note keyed on the last frame.
 - **Note tags.** Clicks are tagged `[clicked]` and pins `[pin]`.
@@ -124,5 +124,4 @@ tests/e2e.py speech.wav                # full run in a throwaway headless GNOME 
 ```sh
 gnome-extensions disable sketchnote@local
 rm ~/.local/share/gnome-shell/extensions/sketchnote@local ~/.local/share/dbus-1/services/org.sketchnote.Service.service
-# and remove the two "Sketchnote" entries in Settings → Keyboard → Custom Shortcuts
 ```

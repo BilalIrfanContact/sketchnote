@@ -9,6 +9,10 @@
 //                   Space + click      = numbered pin
 //                   plain click        = logged as a click event
 //                   Ctrl+Z = undo last stroke/pin,  Esc = cancel
+//
+// When a capture is ready its notes go on the clipboard, and the next Ctrl+V pastes the
+// notes and then the contact sheet (two ordinary pastes, so any app accepts them).
+// Alt+Shift+V does the same for the latest capture at any time (like Scrawl's ⌥⇧V).
 
 import Cairo from 'cairo';
 import Clutter from 'gi://Clutter';
@@ -26,6 +30,11 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 Gio._promisify(Gio.DBusConnection.prototype, 'call');
 
 const START_KEY = '<Alt><Shift>s';
+const PASTE_KEY = '<Control>v';
+const PASTE_LATEST_KEY = '<Alt><Shift>v';
+const PASTE_SETTLE_MS = 400;   // time an app gets to read the clipboard before it changes
+const TEXT_MIME = 'text/plain;charset=utf-8';
+const CAPTURES = GLib.build_filenamev([GLib.get_user_data_dir(), 'sketchnote', 'captures']);
 const PICKER_MS = 3000;        // mode picker shows this long, then Undo/Cancel/Finish
 const FADE_HOLD = 0.5;         // seconds a finished stroke stays fully visible
 const FADE_TIME = 1.0;         // ...then fades out over this long
@@ -34,6 +43,10 @@ const POLL_MS = 10;
 const GLOW_WIDTH = 28;         // px of red fade along each screen edge
 
 const now = () => GLib.get_monotonic_time();   // µs, same clock as Python's time.monotonic
+const sleep = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+    resolve();
+    return GLib.SOURCE_REMOVE;
+}));
 
 async function call(dest, path, iface, method, params = null, replyType = null) {
     const reply = await Gio.DBus.session.call(dest, path, iface, method, params,
@@ -45,6 +58,29 @@ const service = (method, params, replyType) => call('org.sketchnote.Service',
     '/org/sketchnote/Service', 'org.sketchnote.Service', method, params, replyType);
 const screencast = (method, params, replyType) => call('org.gnome.Shell.Screencast',
     '/org/gnome/Shell/Screencast', 'org.gnome.Shell.Screencast', method, params, replyType);
+
+// Newest bundle that has finished building (it has a summary.md), or null.
+function latestBundle() {
+    const names = [];
+    try {
+        const files = Gio.File.new_for_path(CAPTURES).enumerate_children('standard::name',
+            Gio.FileQueryInfoFlags.NONE, null);
+        for (let info; (info = files.next_file(null));)
+            names.push(info.get_name());
+    } catch {
+        return null;
+    }
+    return names.sort().reverse().map(n => GLib.build_filenamev([CAPTURES, n]))
+        .find(dir => GLib.file_test(`${dir}/summary.md`, GLib.FileTest.EXISTS)) ?? null;
+}
+
+function readFile(path) {
+    try {
+        return GLib.file_get_contents(path)[1];
+    } catch {
+        return null;
+    }
+}
 
 // App name, title and frame rect of the topmost ordinary window under (x, y).
 function windowAt(x, y) {
@@ -246,11 +282,30 @@ export default class Sketchnote extends Extension {
             this._keys.get(action)?.();
         });
         this._startKey = this._grabKey(START_KEY, () => this._toggle());
+
+        this._armed = null;         // the capture on the clipboard, while Ctrl+V is ours
+        this._keyboard = Clutter.get_default_backend().get_default_seat()
+            .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+        this._selection = global.display.get_selection();
+        this._ownerId = this._selection.connect('owner-changed', (_s, type, source) => {
+            if (type === Meta.SelectionType.SELECTION_CLIPBOARD && source !== this._armed?.source)
+                this._disarm();     // something else was copied: Ctrl+V is normal again
+        });
+        this._readyId = Gio.DBus.session.signal_subscribe(null, 'org.sketchnote.Service',
+            'BundleReady', '/org/sketchnote/Service', null, Gio.DBusSignalFlags.NONE,
+            (_c, _sender, _path, _iface, _signal, params) => this._arm(params.deepUnpack()[0]));
+        this._pasteLatestKey = this._grabKey(PASTE_LATEST_KEY, () => this._pasteLatest());
     }
 
     disable() {
         if (this._session)
             this._cancel();
+        this._disarm();
+        Gio.DBus.session.signal_unsubscribe(this._readyId);
+        this._selection.disconnect(this._ownerId);
+        this._selection = null;
+        this._keyboard = null;
+        this._ungrabKey(this._pasteLatestKey);
         this._ungrabKey(this._startKey);
         global.display.disconnect(this._accelId);
         this._indicator.destroy();
@@ -283,6 +338,91 @@ export default class Sketchnote extends Extension {
             this._finish();
         else
             this._start('screen', null, true);
+    }
+
+    // --- clipboard: one Ctrl+V pastes the notes and the contact sheet ---------
+
+    _arm(dir) {
+        this._disarm();
+        const text = readFile(`${dir}/summary.md`);
+        if (!text)
+            return;
+        this._armed = {text, image: readFile(`${dir}/contact-sheet.png`), source: null};
+        this._setClipboard(TEXT_MIME, text);
+        this._armed.key = this._grabKey(PASTE_KEY, () => this._pasteAll());
+    }
+
+    _disarm() {
+        if (this._armed)
+            this._ungrabKey(this._armed.key);
+        this._armed = null;
+    }
+
+    _setClipboard(mime, bytes) {
+        this._armed.source = Meta.SelectionSourceMemory.new(mime, new GLib.Bytes(bytes));
+        this._selection.set_owner(Meta.SelectionType.SELECTION_CLIPBOARD, this._armed.source);
+    }
+
+    // Types Ctrl+V for the app twice: once with the notes on the clipboard, once with
+    // the contact sheet. Then the notes go back, ready for another Ctrl+V.
+    async _pasteAll() {
+        const a = this._armed;
+        if (!a?.key)
+            return;                 // a paste is already running
+        this._ungrabKey(a.key);     // so the Ctrl+V typed below reaches the app
+        a.key = null;
+        await this._waitForKeysUp();
+        if (this._armed === a)
+            await this._typeCtrlV();
+        if (a.image && this._armed === a) {
+            this._setClipboard('image/png', a.image);
+            await this._typeCtrlV();
+        }
+        if (this._armed === a) {
+            this._setClipboard(TEXT_MIME, a.text);
+            a.key = this._grabKey(PASTE_KEY, () => this._pasteAll());
+        }
+    }
+
+    _pasteLatest() {
+        const dir = latestBundle();
+        if (dir) {
+            this._arm(dir);
+            this._pasteAll();
+        } else {
+            Main.notify('Sketchnote', 'No finished capture yet');
+        }
+    }
+
+    // The hotkey that triggered a paste is still down. Mutter drops a V press from our
+    // virtual keyboard while the real V is held, and the app must not see Alt or Shift,
+    // so wait for V to come up (a short stage grab catches its release) and for Alt/Shift.
+    async _waitForKeysUp() {
+        const catcher = new Clutter.Actor({reactive: true});
+        Main.uiGroup.add_child(catcher);
+        const grab = global.stage.grab(catcher);
+        await new Promise(resolve => {
+            catcher.connect('event', (_a, event) => {
+                if (event.type() === Clutter.EventType.KEY_RELEASE &&
+                    [Clutter.KEY_v, Clutter.KEY_V].includes(event.get_key_symbol()))
+                    resolve();
+                return Clutter.EVENT_STOP;
+            });
+            sleep(1000).then(resolve);      // V was already up before the grab
+        });
+        grab.dismiss();
+        catcher.destroy();
+        const held = Clutter.ModifierType.SHIFT_MASK | Clutter.ModifierType.MOD1_MASK;
+        for (let ms = 0; ms < 3000 && (global.get_pointer()[2] & held); ms += 10)
+            await sleep(10);
+    }
+
+    async _typeCtrlV() {
+        const {PRESSED, RELEASED} = Clutter.KeyState;
+        for (const [key, state] of [[Clutter.KEY_Control_L, PRESSED], [Clutter.KEY_v, PRESSED],
+            [Clutter.KEY_v, RELEASED], [Clutter.KEY_Control_L, RELEASED]])
+            this._keyboard.notify_keyval(now(), key, state);
+        await sleep(PASTE_SETTLE_MS);
     }
 
     // --- capture lifecycle --------------------------------------------------

@@ -13,6 +13,9 @@ input through Mutter's RemoteDesktop API:
   capture 3: Alt+Shift+S, Esc before the recording has started, Alt+Shift+S again at
              once, one stroke, Alt+Shift+S. The cancel must not clobber the new capture.
 
+Then it opens paste_target.py and checks that Ctrl+V pastes the newest capture's notes
+and contact sheet, that Alt+Shift+V does too, and that Ctrl+V is normal after a copy.
+
 Then waits for the three bundles and checks their contents. Needs install.sh to have
 linked the extension and the D-Bus service file.
 """
@@ -39,7 +42,7 @@ DISPLAY = 'sketchnote-e2e'
 bus = Gio.bus_get_sync(Gio.BusType.SESSION)
 
 KEY = {'shift': 0xffe1, 'alt': 0xffe9, 'ctrl': 0xffe3, 's': 0x73, 'z': 0x7a, 'esc': 0xff1b,
-       'space': 0x20}
+       'space': 0x20, 'v': 0x76, 'c': 0x63}
 BTN_LEFT = 0x110
 AREA_BUTTON = (928, 57)
 
@@ -268,6 +271,7 @@ def main():
         assert [m['type'] for m in d2['marks']] == ['stroke'], 'capture 2 marks'
         d3 = check_bundle(third)
         assert [m['type'] for m in d3['marks']] == ['stroke'], 'capture 3 marks'
+        check_paste(inp, third, procs)
         print('\nE2E OK')
     finally:
         for p in reversed(procs):
@@ -277,6 +281,30 @@ def main():
                 p.wait(5)
             except subprocess.TimeoutExpired:
                 p.kill()
+
+
+def check_paste(inp, bundle_dir, procs):
+    from PIL import Image
+    log = '/tmp/sketchnote-e2e/pastes.log'
+    open(log, 'w').close()
+    procs.append(subprocess.Popen([sys.executable, f'{HERE}/paste_target.py', log],
+                                  env=dict(os.environ, WAYLAND_DISPLAY=DISPLAY, GDK_BACKEND='wayland')))
+    time.sleep(3)
+    lines = lambda: open(log).read().splitlines()  # noqa: E731
+    header = 'text ' + open(f'{bundle_dir}/summary.md').read().splitlines()[0]
+    image = 'image {}x{}'.format(*Image.open(f'{bundle_dir}/contact-sheet.png').size)
+
+    inp.combo('ctrl', 'v')
+    wait_for(lambda: len(lines()) >= 2, 'Ctrl+V to paste notes and image', timeout=10)
+    inp.combo('alt', 'shift', 'v')
+    wait_for(lambda: len(lines()) >= 4, 'Alt+Shift+V to paste notes and image', timeout=10)
+    inp.combo('c')                      # the app copies "other"...
+    time.sleep(0.5)
+    inp.combo('ctrl', 'v')              # ...so Ctrl+V pastes just that
+    wait_for(lambda: len(lines()) >= 5, 'a plain Ctrl+V', timeout=10)
+    time.sleep(1)
+    print('\n== pastes\n' + '\n'.join(lines()))
+    assert lines() == [header, image, header, image, 'text other'], lines()
 
 
 def finish_button(path):

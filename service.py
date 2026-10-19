@@ -81,8 +81,7 @@ class Service:
         try:
             bundle.build(bundle_dir, capture, mic_t0)
             n = sum(1 for _ in os.scandir(os.path.join(bundle_dir, 'frames')))
-            notify('Sketchnote ready', f'{n} notes · Alt+Shift+V pastes the text, '
-                                       'Alt+Shift+I the contact sheet')
+            notify('Sketchnote ready', f'{n} notes · Ctrl+V pastes them with the contact sheet')
             GLib.idle_add(self.emit_ready, bundle_dir)
         except Exception:
             traceback.print_exc()
