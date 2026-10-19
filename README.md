@@ -28,8 +28,8 @@ Requirements, all present on Ubuntu with GNOME 50: `ffmpeg` (with libx264), `pw-
 | Key | What it does |
 |---|---|
 | Alt+Shift+S | Start a capture, or finish the running one (the pencil icon in the top bar does the same) |
-| hold Shift + drag | Draw a thin red stroke. It fades on screen after about 1.5 s but is kept in the output |
-| Shift + click | Drop a numbered pin |
+| hold Space + drag | Draw a thin red stroke. It fades on screen after about 1.5 s but is kept in the output |
+| Space + click | Drop a numbered pin |
 | click | Logged as a click (blue ring in the output) |
 | Ctrl+Z | Undo the last stroke or pin |
 | Esc | Cancel and throw the capture away |
@@ -102,7 +102,7 @@ These are the simplest options, picked deliberately. Change them freely.
 
 ## Known limitations
 
-- **Shift is reserved while capturing.** Holding Shift routes the pointer to drawing, so you can't Shift-click or Shift-select inside apps during a capture.
+- **Space is reserved while capturing.** Space is grabbed globally during a capture, so you can't type spaces into apps until you finish or cancel. Scrawl uses Shift; Space was chosen here so Shift keeps working in apps.
 - **The recording shows Sketchnote's own UI.** GNOME's screencast records everything on screen, so `recording.mp4` and the keyframes include the pill, the glow and the live strokes. The strokes in the keyframes are redrawn on top in the same spot.
 - **Pill placement.** The pill sits on the primary monitor. Screen mode records all monitors as one image.
 - **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`. The mic starts within about 0.1 s, and both offsets are stored and applied. I've seen it take 14 s once. If you cancel or finish and immediately start again, the new capture waits for the previous recording to stop before it starts recording.
