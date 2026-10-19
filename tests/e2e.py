@@ -10,8 +10,10 @@ input through Mutter's RemoteDesktop API:
   capture 1: Alt+Shift+S, two strokes, two clicks, a Shift-click pin, a stroke that is
              undone with Ctrl+Z, then Alt+Shift+S to finish.
   capture 2: Alt+Shift+S, pick "Area" in the pill, drag an area, one stroke, click Finish.
+  capture 3: Alt+Shift+S, Esc before the recording has started, Alt+Shift+S again at
+             once, one stroke, Alt+Shift+S. The cancel must not clobber the new capture.
 
-Then waits for both bundles and checks their contents. Needs install.sh to have
+Then waits for the three bundles and checks their contents. Needs install.sh to have
 linked the extension and the D-Bus service file.
 """
 import json
@@ -234,14 +236,27 @@ def main():
         fx, fy = finish_button('/tmp/sketchnote-e2e/pill-actions.png')
         inp.click(fx, fy)
         print('capture 2 finished')
+        time.sleep(2)
+
+        # --- capture 3: cancel while the recording is still starting, start again ---
+        inp.combo('alt', 'shift', 's')
+        time.sleep(0.2)
+        inp.combo('esc')
+        time.sleep(0.2)
+        inp.combo('alt', 'shift', 's')
+        time.sleep(2.5)
+        inp.drag(ellipse(900, 500, 120, 50))
+        time.sleep(1.5)
+        inp.combo('alt', 'shift', 's')
+        print('capture 3 finished')
 
         def done():
             new = sorted(latest_bundles() - before)
             root = os.path.expanduser('~/.local/share/sketchnote/captures')
-            return len(new) == 2 and all(
+            return len(new) == 3 and all(
                 os.path.exists(f'{root}/{n}/summary.md') for n in new)
-        wait_for(done, 'both bundles', timeout=300)
-        first, second = [os.path.expanduser(f'~/.local/share/sketchnote/captures/{n}')
+        wait_for(done, 'three bundles', timeout=300)
+        first, second, third = [os.path.expanduser(f'~/.local/share/sketchnote/captures/{n}')
                          for n in sorted(latest_bundles() - before)]
         d1 = check_bundle(first)
         assert [m['type'] for m in d1['marks']] == \
@@ -250,6 +265,8 @@ def main():
         d2 = check_bundle(second)
         assert d2['mode'] == 'area' and d2['area'] == [500, 250, 800, 500], d2['area']
         assert [m['type'] for m in d2['marks']] == ['stroke'], 'capture 2 marks'
+        d3 = check_bundle(third)
+        assert [m['type'] for m in d3['marks']] == ['stroke'], 'capture 3 marks'
         print('\nE2E OK')
     finally:
         for p in reversed(procs):

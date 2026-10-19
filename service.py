@@ -69,6 +69,8 @@ class Service:
             self.mic = None
 
     def finish(self, capture):
+        if not self.dir:
+            raise RuntimeError('no capture in progress')
         self.stop_mic()
         bundle_dir, mic_t0 = self.dir, self.mic_t0
         self.dir = None

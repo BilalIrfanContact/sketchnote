@@ -236,6 +236,7 @@ class Pill {
 export default class Sketchnote extends Extension {
     enable() {
         this._session = null;
+        this._stopping = Promise.resolve();     // the previous session's teardown
         this._ui = null;
         this._stroke = null;
         this._keys = new Map();     // action id -> handler
@@ -296,8 +297,11 @@ export default class Sketchnote extends Extension {
         s.ready = this._record(s);
     }
 
+    // The service and GNOME's screencast each handle one recording at a time, so a new
+    // session waits until the previous one (possibly still starting up) has fully stopped.
     async _record(s) {
         try {
+            await this._stopping;
             const [dir] = await service('Start', null, '(s)');
             const [ok, used] = await this._screencast(s, GLib.build_filenamev([dir, 'screencast']));
             if (!ok)
@@ -337,11 +341,16 @@ export default class Sketchnote extends Extension {
             await screencast('StopScreencast', null, '(b)').catch(logError);
     }
 
-    async _finish() {
+    _finish() {
         const s = this._session;
         const end = now();
         this._session = null;
         this._hideUi();
+        this._stopping = this._save(s, end).catch(logError);
+        return this._stopping;
+    }
+
+    async _save(s, end) {
         await this._stopRecording(s);
         if (!s.video) {
             await service('Cancel').catch(logError);
@@ -355,15 +364,16 @@ export default class Sketchnote extends Extension {
             .catch(e => Main.notify('Sketchnote', `Could not save capture: ${e.message}`));
     }
 
-    async _cancel() {
+    _cancel() {
         this._endSelection();
         const s = this._session;
         this._session = null;
         this._hideUi();
         if (!s)
-            return;
-        await this._stopRecording(s);
-        await service('Cancel').catch(logError);
+            return this._stopping;
+        this._stopping = this._stopRecording(s)
+            .then(() => service('Cancel')).catch(logError);
+        return this._stopping;
     }
 
     // Picker click: restart the capture in the chosen mode (the timer starts over).

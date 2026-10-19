@@ -105,7 +105,7 @@ These are the simplest options, picked deliberately. Change them freely.
 - **Shift is reserved while capturing.** Holding Shift routes the pointer to drawing, so you can't Shift-click or Shift-select inside apps during a capture.
 - **The recording shows Sketchnote's own UI.** GNOME's screencast records everything on screen, so `recording.mp4` and the keyframes include the pill, the glow and the live strokes. The strokes in the keyframes are redrawn on top in the same spot.
 - **Pill placement.** The pill sits on the primary monitor. Screen mode records all monitors as one image.
-- **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`. The mic starts within about 0.1 s, and both offsets are stored and applied.
+- **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`. The mic starts within about 0.1 s, and both offsets are stored and applied. I've seen it take 14 s once. If you cancel or finish and immediately start again, the new capture waits for the previous recording to stop before it starts recording.
 - **Missed clicks.** Clicks are detected by polling every 10 ms, so a press shorter than that could be missed.
 - **Heavy work runs niced.** Transcription and video conversion use `nice -n 10` and half the CPU cores, so the desktop stays responsive while a bundle builds.
 - **CPU transcription.** It takes roughly 0.6× real time plus about 3 s to load the model. Set `SKETCHNOTE_MODEL=base` in the D-Bus service file's environment if you want it faster.
