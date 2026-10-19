@@ -1,0 +1,7 @@
+{
+  "uuid": "sketchnote@local",
+  "name": "Sketchnote",
+  "description": "Show an agent the problem: record the screen, talk, click and draw, then paste the result.",
+  "shell-version": ["50"],
+  "url": "file:///home/biloo0/Projects/Scrawl/sketchnote"
+}
