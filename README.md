@@ -1,0 +1,128 @@
+# Sketchnote
+
+Show a coding agent the problem: press a hotkey, talk, click and draw on your screen,
+then paste the result into your agent. A Linux (GNOME 50, Wayland) take on
+[Scrawl](https://scrawl.kitlangton.com/).
+
+## Install
+
+```sh
+./install.sh
+```
+
+Then **log out and back in once**. GNOME on Wayland only discovers new extensions at login.
+
+`install.sh` does four things:
+
+- Creates `.venv` with faster-whisper and downloads the `small` model.
+- Symlinks `extension/sketchnote@local` into `~/.local/share/gnome-shell/extensions/` and enables it.
+- Writes a D-Bus activation file so the service starts on demand.
+- Adds two GNOME custom shortcuts for pasting.
+
+It is safe to re-run.
+
+Requirements, all present on Ubuntu with GNOME 50: `ffmpeg` (with libx264), `pw-record`, `wl-copy`, `notify-send`, and python3 with PyGObject and Pillow.
+
+## Use
+
+| Key | What it does |
+|---|---|
+| Alt+Shift+S | Start a capture, or finish the running one (the pencil icon in the top bar does the same) |
+| hold Shift + drag | Draw a thin red stroke. It fades on screen after about 1.5 s but is kept in the output |
+| Shift + click | Drop a numbered pin |
+| click | Logged as a click (blue ring in the output) |
+| Ctrl+Z | Undo the last stroke or pin |
+| Esc | Cancel and throw the capture away |
+| Alt+Shift+V | Copy the latest capture's notes (`summary.md`) to the clipboard |
+| Alt+Shift+I | Copy the latest capture's contact sheet (PNG) to the clipboard |
+
+Starting a capture records the whole screen and the microphone immediately. While it runs:
+
+- A red glow outlines the screen.
+- A stop icon appears in the top bar.
+- A pill at top centre shows the timer and **Area / Window / Screen** for 3 seconds. Picking **Window** or **Area** restarts the capture on that target, and Area lets you drag a rectangle. The pill then switches to **Undo / Cancel / Finish**.
+
+After Finish, the capture is transcribed locally, which takes about 20 s for 30 s of speech on CPU. A notification says when it's ready. Then press Alt+Shift+V in your agent's input box and Ctrl+V to paste the notes. Press Alt+Shift+I and Ctrl+V to attach the contact sheet. Wayland doesn't let apps type into other windows, so pasting is always your Ctrl+V.
+
+CLI: `./sketchnote paste-text | paste-image | latest | service`.
+
+## Output
+
+Each capture is a folder `~/.local/share/sketchnote/captures/<timestamp>.bundle/`:
+
+| File | Contents |
+|---|---|
+| `recording.mp4` | Screen recording, H.264, 30 fps |
+| `audio.wav` | Microphone, 16 kHz mono |
+| `frames/frame-NN.png` | Keyframe per mark, cropped to the activity, annotations burned in |
+| `frames-full/frame-NN.png` | The same keyframes uncropped |
+| `contact-sheet.png` | Cropped keyframes in a two-column grid with number badges |
+| `summary.md` | The handoff text, copied by Alt+Shift+V |
+| `sketchnote.json` | Timings, strokes, clicks, pins, target window, word timestamps, marks |
+
+`summary.md` looks like this:
+
+```
+[sketchnote 0:31 · Text Editor "notes.txt" · /home/you/.local/share/sketchnote/captures/2026-10-19_21-10-00.bundle]
+Cropped to: the activity in Text Editor (full frames in frames-full/)
+- #1 (0:04) “This footer has too much text, let's cut it down”
+- #2 (0:10) “and the model name here is out of date”
+- #3 (0:11) [clicked] “this button should open the settings instead”
+...
+
+The contact sheet is attached (…/contact-sheet.png); read …/sketchnote.json for timestamped transcript, marks, and interactions.
+```
+
+## How it's built
+
+- **`extension/sketchnote@local/extension.js`** (GNOME Shell extension). It handles the hotkey, glow, pill, live ink, pins, click logging, undo, cancel and area picking. It records the screen through GNOME Shell's own Screencast service. Only the Shell may call that service, so there's no portal prompt and the recording code lives in the extension.
+- **`service.py`** (D-Bus `org.sketchnote.Service`). It records the mic with `pw-record` and builds the bundle on Finish.
+- **`bundle.py`**. Converts the video, turns events into marks, assigns speech to marks, and draws keyframes, crops, the contact sheet and `summary.md`.
+- **`transcribe.py`**. faster-whisper `small`, int8, with word timestamps. It runs in `.venv`.
+- **`sketchnote`**. The CLI entry point.
+
+To rename, change `sketchnote`/`org.sketchnote` in those files, the extension uuid, and `install.sh`.
+
+## Decisions where the spec says "unknown"
+
+These are the simplest options, picked deliberately. Change them freely.
+
+- **Hotkeys.** Scrawl's ⌥⇧S / ⌥⇧V become Alt+Shift+S / Alt+Shift+V. There's no single paste for text plus image on Wayland, so the image gets its own key, Alt+Shift+I. Hotkeys are constants at the top of `extension.js` and in `install.sh`. There's no settings UI.
+- **Mode picker.** It shows for 3 s. Picking Window uses the window that was focused when you pressed the hotkey. Picking Window or Area restarts the capture, so the timer resets. There's no iPhone mode.
+- **Marks.** Every stroke, click and pin is its own mark; nothing is merged. Each mark gets the words spoken from its start until the next mark. Words spoken before the first mark go to #1. With no marks, the whole capture is one note keyed on the last frame.
+- **Note tags.** Clicks are tagged `[clicked]` and pins `[pin]`.
+- **Pins.** A red circle showing its mark number, fading like strokes.
+- **Undo.** Removes the last stroke or pin. Clicks can't be undone.
+- **Fade timing.** Strokes stay 0.5 s, then fade over 1 s.
+- **Clicks on screen.** Not shown live. Clicks on the pill or the top bar aren't logged.
+- **Keyframes.** Taken 0.1 s after a stroke ends (or a click or pin lands). The crop is the activity's bounding box plus 160 px, at least 640×400, clamped to the window under the activity.
+- **Header.** The app and title come from the window most marks were in.
+- **After Finish.** A desktop notification when the bundle is ready. Scrawl shows nothing, but local transcription takes a while.
+- **Esc and Ctrl+Z.** Grabbed globally, but only while a capture runs.
+
+## Known limitations
+
+- **Shift is reserved while capturing.** Holding Shift routes the pointer to drawing, so you can't Shift-click or Shift-select inside apps during a capture.
+- **The recording shows Sketchnote's own UI.** GNOME's screencast records everything on screen, so `recording.mp4` and the keyframes include the pill, the glow and the live strokes. The strokes in the keyframes are redrawn on top in the same spot.
+- **Pill placement.** The pill sits on the primary monitor. Screen mode records all monitors as one image.
+- **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`. The mic starts within about 0.1 s, and both offsets are stored and applied.
+- **Missed clicks.** Clicks are detected by polling every 10 ms, so a press shorter than that could be missed.
+- **Heavy work runs niced.** Transcription and video conversion use `nice -n 10` and half the CPU cores, so the desktop stays responsive while a bundle builds.
+- **CPU transcription.** It takes roughly 0.6× real time plus about 3 s to load the model. Set `SKETCHNOTE_MODEL=base` in the D-Bus service file's environment if you want it faster.
+
+## Tests
+
+```sh
+python3 -m unittest discover tests     # bundle logic (marks, speech split, crops, layout)
+tests/e2e.py speech.wav                # full run in a throwaway headless GNOME Shell
+```
+
+`e2e.py` doesn't touch your session. It starts `gnome-shell --headless` on a private bus with a private dconf, enables the extension there, and plays `speech.wav` (about 30 s of you talking, any WAV) into a virtual mic. It then drives real keyboard and pointer input through Mutter's RemoteDesktop API: strokes, clicks, a pin, undo, the Area picker and Finish. Finally it checks both bundles. Results are written to `~/.local/share/sketchnote/captures/`.
+
+## Uninstall
+
+```sh
+gnome-extensions disable sketchnote@local
+rm ~/.local/share/gnome-shell/extensions/sketchnote@local ~/.local/share/dbus-1/services/org.sketchnote.Service.service
+# and remove the two "Sketchnote" entries in Settings → Keyboard → Custom Shortcuts
+```
