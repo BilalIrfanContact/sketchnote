@@ -35,13 +35,13 @@ Requirements: a Rust toolchain and `cmake` to build (whisper.cpp is compiled in)
 | Ctrl+V | Right after a capture is ready: paste its notes and contact sheet together |
 | Alt+Shift+V | Paste the latest capture's notes and contact sheet, any time |
 
-Starting a capture records the whole screen and the microphone immediately. While it runs:
+Starting a capture starts the microphone at once and the screen recorder within a second or two. The pill at top centre always says which state it's in:
 
-- A red glow outlines the screen.
-- A stop icon appears in the top bar.
-- A pill at top centre shows the timer and **Area / Window / Screen** for 3 seconds. Picking **Window** or **Area** restarts the capture on that target, and Area lets you drag a rectangle. The pill then switches to **Undo / Cancel / Finish**.
+- **Starting…** with a grey dot: the screen recorder isn't running yet.
+- **Recording**: a red dot and the timer, a red glow around the screen, and a stop icon in the top bar.
+- The pill also shows **Area / Window / Screen** for 3 seconds. Picking **Window** or **Area** restarts the capture on that target, and Area lets you drag a rectangle. The pill then switches to **Undo / Cancel / Finish**.
 
-After Finish, the capture is transcribed locally, which takes about 10 s for 20 s of speech on CPU. A notification says when it's ready, and the notes are now on the clipboard. Press Ctrl+V in your agent's input box: the extension pastes the notes, swaps the clipboard to the contact sheet and pastes again, so you get the text and the image from one key press. Each is an ordinary paste, so this works in any app that accepts pasted text and images. Once you copy something else, Ctrl+V is normal again; Alt+Shift+V pastes the latest capture whenever you want it back.
+After Finish, the pill stays up with an amber dot: **Saving…**, then **Transcribing…** (about 10 s for 20 s of speech on CPU). It turns green with **Ready · Ctrl+V to paste** when the notes are on the clipboard, then hides after a few seconds. If building fails, it says so and a notification gives the reason. Press Ctrl+V in your agent's input box: the extension pastes the notes, swaps the clipboard to the contact sheet and pastes again, so you get the text and the image from one key press. Each is an ordinary paste, so this works in any app that accepts pasted text and images. Once you copy something else, Ctrl+V is normal again; Alt+Shift+V pastes the latest capture whenever you want it back.
 
 CLI: `target/release/sketchnote latest | service | transcribe file.wav`.
 
@@ -94,7 +94,7 @@ These are the simplest options, picked deliberately. Change them freely.
 - **Clicks on screen.** Not shown live. Clicks on the pill or the top bar aren't logged.
 - **Keyframes.** Taken 0.1 s after a stroke ends (or a click or pin lands). The crop is the activity's bounding box plus 160 px, at least 640×400, clamped to the window under the activity.
 - **Notes only.** `summary.md` is just the numbered notes; Scrawl's header, crop and attachment lines are left out because the image is pasted alongside. The target app and window are still in `sketchnote.json`.
-- **After Finish.** A desktop notification when the bundle is ready. Scrawl shows nothing, but local transcription takes a while.
+- **After Finish.** A status pill (Saving… / Transcribing… / Ready) instead of a notification. Scrawl shows nothing, but local transcription takes a while.
 - **Esc and Ctrl+Z.** Grabbed globally, but only while a capture runs.
 
 ## Known limitations
@@ -102,7 +102,7 @@ These are the simplest options, picked deliberately. Change them freely.
 - **Space is reserved while capturing.** Space is grabbed globally during a capture, so you can't type spaces into apps until you finish or cancel. Scrawl uses Shift; Space was chosen here so Shift keeps working in apps.
 - **The recording shows Sketchnote's own UI.** GNOME's screencast records everything on screen, so `recording.mp4` and the keyframes include the pill, the glow and the live strokes. The strokes in the keyframes are redrawn on top in the same spot.
 - **Pill placement.** The pill sits on the primary monitor. Screen mode records all monitors as one image.
-- **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`. The mic starts within about 0.1 s, and both offsets are stored and applied. I've seen it take 14 s once. If you cancel or finish and immediately start again, the new capture waits for the previous recording to stop before it starts recording.
+- **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`; the pill says **Starting…** until it's running. The mic starts within about 0.1 s, and both offsets are stored and applied. I've seen it take 14 s once. If you cancel or finish and immediately start again, the new capture waits for the previous recording to stop before it starts recording.
 - **Missed clicks.** Clicks are detected by polling every 10 ms, so a press shorter than that could be missed.
 - **Heavy work runs niced.** Building a bundle runs at nice 10, and transcription uses half the CPU cores, so the desktop stays responsive.
 - **CPU transcription, English only.** It takes roughly 0.5× real time. The language is fixed to English, because auto-detection was slower and sometimes picked the wrong language. To try another whisper.cpp model, set `SKETCHNOTE_MODEL=/path/to/ggml-model.bin` in the D-Bus service file's environment. `sketchnote transcribe file.wav` prints a recording's words with timestamps.

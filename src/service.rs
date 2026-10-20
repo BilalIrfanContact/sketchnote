@@ -3,7 +3,8 @@
 //!     Start()        -> new bundle dir; starts recording the microphone into it
 //!     Finish(json)   -> bundle dir; stops the mic and queues the bundle to be built
 //!     Cancel()       -> stops the mic and deletes the bundle dir
-//!     signal BundleReady(path) when a bundle is finished (also a desktop notification)
+//!     signal BundleReady(path) when a bundle is finished
+//!     signal BundleFailed(path) when building it failed (also a desktop notification)
 //!
 //! Started on demand by D-Bus activation (see install.sh).
 
@@ -102,20 +103,21 @@ fn build_all(conn: Connection, queue: mpsc::Receiver<Build>) {
     media::be_nice();
     for (dir, capture, mic_t0) in queue {
         match bundle::build(&dir, &capture, mic_t0) {
-            Ok(()) => {
-                let n = std::fs::read_dir(dir.join("frames")).map_or(0, |d| d.count());
-                media::notify("Sketchnote ready", &format!("{n} notes · Ctrl+V pastes them with the contact sheet"));
-                let path = dir.display().to_string();
-                let sent = zbus::block_on(conn.emit_signal(None::<&str>, PATH, NAME, "BundleReady", &(path,)));
-                if let Err(e) = sent {
-                    eprintln!("BundleReady: {e}");
-                }
-            }
+            // The extension's pill shows "Ready"; a notification would just repeat it.
+            Ok(()) => emit(&conn, "BundleReady", dir.display().to_string()),
             Err(e) => {
                 eprintln!("building {}: {e:#}", dir.display());
                 media::notify("Sketchnote failed", &format!("Could not build {}; see the journal", dir.display()));
+                emit(&conn, "BundleFailed", dir.display().to_string());
             }
         }
+    }
+}
+
+/// Sends `signal(path)`, once; the extension updates its status pill from it.
+fn emit(conn: &Connection, signal: &str, path: String) {
+    if let Err(e) = zbus::block_on(conn.emit_signal(None::<&str>, PATH, NAME, signal, &(path,))) {
+        eprintln!("{signal}: {e}");
     }
 }
 
