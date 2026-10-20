@@ -18,6 +18,14 @@ It has two halves that talk over D-Bus (`org.sketchnote.Service`):
 - The Scrawl demo video and `../work/` were inspiration only. Never copy or commit anything from them (frames, transcript, audio, spec text).
 - When committing, avoid very large single commits; prefer smaller commits wherever possible.
 
+## Branches and pull requests
+
+- Every piece of work gets its own branch off `main` and a PR. Nothing is pushed straight to `main`.
+- PR titles are plain, verb-first sentences about what changes for the user, with no `feat:`/`fix:` prefix (e.g. "Show when recording really starts and when the notes are ready to paste"). PRs are squash-merged, so the title becomes the commit on `main`.
+- The description opens with the problem in plain words, then the solution. No file-by-file inventory.
+- After opening a PR, have it reviewed in a separate delegated task: GPT-6.1-Sol on high reasoning, given the PR link, running `/code-review`. Fix every finding worth fixing (and say why for any you skip), push, and wait for CI to pass. Only then tell the user the PR is reviewed and ready to merge.
+- Before merging, rebase the branch on the latest `main` so CI checks what will actually land.
+
 ## Local development commands
 
 ```bash
