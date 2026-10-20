@@ -57,8 +57,7 @@ impl Service {
     fn start(&self) -> fdo::Result<String> {
         let mut rec = self.rec.lock().unwrap();
         rec.cancel();
-        let dir = captures_dir().join(chrono::Local::now().format("%Y-%m-%d_%H-%M-%S.bundle").to_string());
-        std::fs::create_dir_all(&dir).map_err(failed)?;
+        let dir = new_bundle_dir().map_err(failed)?;
         rec.mic = Some(Mic::start(&dir.join("audio.wav")).map_err(failed)?);
         rec.mic_t0 = media::monotonic_us();
         rec.dir = Some(dir.clone());
@@ -78,6 +77,22 @@ impl Service {
     fn cancel(&self) {
         self.rec.lock().unwrap().cancel();
     }
+}
+
+/// A fresh `<timestamp>.bundle` dir. Never reuses one: two captures in the same second
+/// get `_2`, `_3`, ... (which sort after the first, so `latest` stays right).
+fn new_bundle_dir() -> std::io::Result<PathBuf> {
+    std::fs::create_dir_all(captures_dir())?;
+    let stamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+    for n in 1.. {
+        let name = if n == 1 { format!("{stamp}.bundle") } else { format!("{stamp}_{n}.bundle") };
+        let dir = captures_dir().join(name);
+        match std::fs::create_dir(&dir) {
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            result => return result.map(|()| dir),
+        }
+    }
+    unreachable!()
 }
 
 /// Builds bundles one at a time, in the order they were finished. So the newest capture
