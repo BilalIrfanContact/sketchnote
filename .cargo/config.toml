@@ -1,0 +1,3 @@
+[env]
+# Use whisper-rs's pre-generated bindings, so building doesn't need libclang.
+WHISPER_DONT_GENERATE_BINDINGS = "1"
