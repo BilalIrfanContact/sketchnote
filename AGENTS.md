@@ -23,6 +23,7 @@ It has two halves that talk over D-Bus (`org.sketchnote.Service`):
 ```bash
 ./install.sh                          # cargo build, models, extension symlink, D-Bus activation file; safe to re-run
 cargo test                            # bundle logic
+cargo fmt && cargo clippy --release --all-targets -- -D warnings   # CI fails on either
 ./target/release/sketchnote transcribe audio.wav   # words + timestamps, for tuning transcription
 tests/e2e.py speech.wav               # full run in a throwaway headless GNOME Shell
 ./target/release/sketchnote latest    # newest bundle path

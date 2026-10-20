@@ -114,6 +114,8 @@ cargo test                             # bundle logic (marks, speech split, crop
 tests/e2e.py speech.wav                # full run in a throwaway headless GNOME Shell
 ```
 
+CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, clippy with warnings as errors and `cargo test` on every PR, and syntax-checks the extension and scripts. `e2e.py` needs GNOME Shell, so run it locally before merging extension changes.
+
 `e2e.py` doesn't touch your session. It starts `gnome-shell --headless` on a private bus with a private dconf, enables the extension there, and plays `speech.wav` (about 30 s of you talking, any WAV) into a virtual mic. It then drives real keyboard and pointer input through Mutter's RemoteDesktop API: strokes, clicks, a pin, undo, the Area picker and Finish. Finally it checks both bundles. Results are written to `~/.local/share/sketchnote/captures/`.
 
 ## Uninstall

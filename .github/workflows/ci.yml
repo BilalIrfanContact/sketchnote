@@ -1,0 +1,32 @@
+# Checks every PR and every push to main. tests/e2e.py needs a GNOME Shell session,
+# so it isn't run here; run it locally before merging changes to the extension.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2 # whisper.cpp takes minutes to compile from scratch
+      - run: cargo fmt --check
+      - run: cargo clippy --release --all-targets -- -D warnings
+      - run: cargo test --release
+
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extension parses
+        run: cp extension/sketchnote@local/extension.js /tmp/extension.mjs && node --check /tmp/extension.mjs
+      - name: install.sh parses
+        run: bash -n install.sh
+      - name: Test scripts compile
+        run: python3 -m py_compile tests/*.py
