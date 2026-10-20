@@ -41,6 +41,8 @@ const FADE_TIME = 1.0;         // ...then fades out over this long
 const PIN_MAX_MOVE = 5;        // a Space+press that moves less than this is a pin
 const POLL_MS = 10;
 const GLOW_WIDTH = 28;         // px of red fade along each screen edge
+const STATUS_MS = 6000;        // a "Ready" or "Failed" status hides itself after this
+const DOT_STATES = ['starting', 'recording', 'busy', 'ready', 'failed'];
 
 const now = () => GLib.get_monotonic_time();   // µs, same clock as Python's time.monotonic
 const sleep = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
@@ -199,16 +201,19 @@ class Ink {
     }
 }
 
-// The top-centre pill: picker phase (Area / Window / Screen), then Undo / Cancel / Finish.
+// The top-centre pill. During a capture: a state dot, "Starting…" or the timer, then the
+// picker (Area / Window / Screen) or Undo / Cancel / Finish. After one: a status line
+// (Saving… / Transcribing… / Ready) with no buttons.
 class Pill {
-    constructor({onMode, onUndo, onCancel, onFinish}) {
+    constructor({onMode, onUndo, onCancel, onFinish} = {}) {
         this.actor = new St.BoxLayout({style_class: 'sketchnote-pill', reactive: true});
-        this.actor.add_child(new St.Widget({style_class: 'sketchnote-dot',
-            y_align: Clutter.ActorAlign.CENTER}));
-        this._timer = new St.Label({style_class: 'sketchnote-timer', text: '0:00',
+        this._dot = new St.Widget({style_class: 'sketchnote-dot', y_align: Clutter.ActorAlign.CENTER});
+        this.actor.add_child(this._dot);
+        this._timer = new St.Label({style_class: 'sketchnote-timer', text: '',
             y_align: Clutter.ActorAlign.CENTER});
         this.actor.add_child(this._timer);
-        this.actor.add_child(new St.Widget({style_class: 'sketchnote-sep'}));
+        this._sep = new St.Widget({style_class: 'sketchnote-sep'});
+        this.actor.add_child(this._sep);
 
         this._modes = {};
         for (const [mode, label] of [['area', 'Area'], ['window', 'Window'], ['screen', 'Screen']]) {
@@ -226,7 +231,8 @@ class Pill {
     _button(label, onClick, extraClass = '') {
         const b = new St.Button({label, style_class: `sketchnote-btn ${extraClass}`,
             y_align: Clutter.ActorAlign.CENTER});
-        b.connect('clicked', onClick);
+        if (onClick)
+            b.connect('clicked', onClick);
         this.actor.add_child(b);
         return b;
     }
@@ -256,6 +262,22 @@ class Pill {
             b.visible = false;
         for (const b of [this.undo, this._cancel, this._finish])
             b.visible = true;
+    }
+
+    // One of DOT_STATES colours the dot; `text` replaces the timer (null keeps it).
+    setState(state, text = null) {
+        DOT_STATES.forEach(st => this._dot.remove_style_class_name(st));
+        this._dot.add_style_class_name(state);
+        if (text !== null)
+            this._timer.text = text;
+    }
+
+    // Status-only pill: no separator, no buttons.
+    showStatus(state, text) {
+        this._sep.visible = false;
+        for (const b of [...Object.values(this._modes), this.undo, this._cancel, this._finish])
+            b.visible = false;
+        this.setState(state, text);
     }
 
     setTime(seconds) {
@@ -293,7 +315,12 @@ export default class Sketchnote extends Extension {
         });
         this._readyId = Gio.DBus.session.signal_subscribe(null, 'org.sketchnote.Service',
             'BundleReady', '/org/sketchnote/Service', null, Gio.DBusSignalFlags.NONE,
-            (_c, _sender, _path, _iface, _signal, params) => this._arm(params.deepUnpack()[0]));
+            (_c, _sender, _path, _iface, _signal, params) => this._onBundleReady(params.deepUnpack()[0]));
+        this._failedId = Gio.DBus.session.signal_subscribe(null, 'org.sketchnote.Service',
+            'BundleFailed', '/org/sketchnote/Service', null, Gio.DBusSignalFlags.NONE,
+            (_c, _sender, _path, _iface, _signal, params) => this._onBundleFailed(params.deepUnpack()[0]));
+        this._status = null;        // the after-capture status pill
+        this._building = null;      // bundle dir the status pill is waiting for
         this._pasteLatestKey = this._grabKey(PASTE_LATEST_KEY, () => this._pasteLatest());
     }
 
@@ -301,7 +328,9 @@ export default class Sketchnote extends Extension {
         if (this._session)
             this._cancel();
         this._disarm();
+        this._hideStatus();
         Gio.DBus.session.signal_unsubscribe(this._readyId);
+        Gio.DBus.session.signal_unsubscribe(this._failedId);
         this._selection.disconnect(this._ownerId);
         this._selection = null;
         this._keyboard = null;
@@ -340,6 +369,50 @@ export default class Sketchnote extends Extension {
             this._start('screen', null, true);
     }
 
+    // --- after Finish: Saving… -> Transcribing… -> Ready / Failed ----------------
+
+    // Shows the status pill, unless a new capture's pill is up. `ms` > 0 hides it after.
+    _showStatus(state, text, ms = 0) {
+        if (this._session)
+            return;
+        if (!this._status)
+            this._status = {pill: new Pill(), timeout: 0};
+        const st = this._status;
+        st.pill.showStatus(state, text);
+        if (st.timeout)
+            GLib.source_remove(st.timeout);
+        st.timeout = ms ? GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+            st.timeout = 0;
+            this._hideStatus();
+            return GLib.SOURCE_REMOVE;
+        }) : 0;
+    }
+
+    _hideStatus() {
+        const st = this._status;
+        if (!st)
+            return;
+        this._status = null;
+        if (st.timeout)
+            GLib.source_remove(st.timeout);
+        st.pill.destroy();
+    }
+
+    _onBundleReady(dir) {
+        this._arm(dir);
+        if (dir === this._building) {
+            this._building = null;
+            this._showStatus('ready', 'Ready · Ctrl+V to paste', STATUS_MS);
+        }
+    }
+
+    _onBundleFailed(dir) {
+        if (dir === this._building) {
+            this._building = null;
+            this._showStatus('failed', "Couldn't build the notes", STATUS_MS);
+        }
+    }
+
     // --- clipboard: one Ctrl+V pastes the notes and the contact sheet ---------
 
     _arm(dir) {
@@ -371,6 +444,7 @@ export default class Sketchnote extends Extension {
             return;                 // a paste is already running
         this._ungrabKey(a.key);     // so the Ctrl+V typed below reaches the app
         a.key = null;
+        this._hideStatus();
         await this._waitForKeysUp();
         if (this._armed === a)
             await this._typeCtrlV();
@@ -429,6 +503,7 @@ export default class Sketchnote extends Extension {
 
     _start(mode, rect, withPicker) {
         const focus = windowInfo(global.display.focus_window);
+        this._hideStatus();
         this._showUi(withPicker ? mode : null);
         const s = {t0: now(), mode, focus, events: [], video: null, videoT0: 0};
         s.area = rect ?? [0, 0, global.stage.width, global.stage.height];
@@ -448,6 +523,8 @@ export default class Sketchnote extends Extension {
                 throw new Error('GNOME Shell refused to start the screencast');
             s.video = used;
             s.videoT0 = now();
+            if (s === this._session)
+                this._showRecording();
         } catch (e) {
             console.error(`sketchnote: start failed: ${e.message}`);
             Main.notify('Sketchnote', `Could not start recording: ${e.message}`);
@@ -486,13 +563,15 @@ export default class Sketchnote extends Extension {
         const end = now();
         this._session = null;
         this._hideUi();
+        this._showStatus('busy', 'Saving…');
         this._stopping = this._save(s, end).catch(logError);
         return this._stopping;
     }
 
     async _save(s, end) {
         await this._stopRecording(s);
-        if (!s.video) {
+        if (!s.video) {     // recording never started (already reported)
+            this._hideStatus();
             await service('Cancel').catch(logError);
             return;
         }
@@ -500,8 +579,14 @@ export default class Sketchnote extends Extension {
             t0: s.t0, end, video_t0: s.videoT0, video: s.video,
             mode: s.mode, area: s.area, window: s.focus, events: s.events,
         };
-        await service('Finish', new GLib.Variant('(s)', [JSON.stringify(capture)]), '(s)')
-            .catch(e => Main.notify('Sketchnote', `Could not save capture: ${e.message}`));
+        try {
+            [this._building] = await service('Finish',
+                new GLib.Variant('(s)', [JSON.stringify(capture)]), '(s)');
+            this._showStatus('busy', 'Transcribing…');
+        } catch (e) {
+            Main.notify('Sketchnote', `Could not save capture: ${e.message}`);
+            this._showStatus('failed', "Couldn't save the capture", STATUS_MS);
+        }
     }
 
     _cancel() {
@@ -536,20 +621,7 @@ export default class Sketchnote extends Extension {
     // --- UI -------------------------------------------------------------------
 
     _showUi(pickerMode) {
-        const ui = {};
-        ui.glows = Main.layoutManager.monitors.map(m => {
-            const g = new St.Widget({style_class: 'sketchnote-glow', reactive: false,
-                x: m.x, y: m.y, width: m.width, height: m.height});
-            const e = GLOW_WIDTH;
-            for (const [side, x, y, w, h] of [['top', 0, 0, m.width, e],
-                ['bottom', 0, m.height - e, m.width, e], ['left', 0, 0, e, m.height],
-                ['right', m.width - e, 0, e, m.height]]) {
-                g.add_child(new St.Widget({style_class: `sketchnote-glow-${side}`,
-                    x, y, width: w, height: h}));
-            }
-            Main.uiGroup.add_child(g);
-            return g;
-        });
+        const ui = {glows: []};
         ui.ink = new Ink();
         Main.uiGroup.add_child(ui.ink.actor);
         // Takes pointer input only while Space is held, so normal clicks reach apps.
@@ -575,8 +647,9 @@ export default class Sketchnote extends Extension {
             ui.pill.showActions();
         }
         ui.pill.undo.reactive = false;
+        ui.pill.setState('starting', 'Starting…');
         ui.clock = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-            if (this._session)
+            if (this._session?.video)
                 ui.pill.setTime((now() - this._session.t0) / 1e6);
             return GLib.SOURCE_CONTINUE;
         });
@@ -589,6 +662,26 @@ export default class Sketchnote extends Extension {
             this._grabKey('<Control>z', () => this._undo())];
         this._indicator.setRecording(true);
         this._ui = ui;
+    }
+
+    // GNOME's recorder is running: red dot, timer, and the red glow around each monitor.
+    _showRecording() {
+        const ui = this._ui;
+        ui.pill.setState('recording');
+        ui.pill.setTime((now() - this._session.t0) / 1e6);
+        ui.glows = Main.layoutManager.monitors.map(m => {
+            const g = new St.Widget({style_class: 'sketchnote-glow', reactive: false,
+                x: m.x, y: m.y, width: m.width, height: m.height});
+            const e = GLOW_WIDTH;
+            for (const [side, x, y, w, h] of [['top', 0, 0, m.width, e],
+                ['bottom', 0, m.height - e, m.width, e], ['left', 0, 0, e, m.height],
+                ['right', m.width - e, 0, e, m.height]]) {
+                g.add_child(new St.Widget({style_class: `sketchnote-glow-${side}`,
+                    x, y, width: w, height: h}));
+            }
+            Main.uiGroup.insert_child_below(g, ui.ink.actor);
+            return g;
+        });
     }
 
     _hideUi() {

@@ -10,15 +10,21 @@
   width: 8px;
   height: 8px;
   border-radius: 4px;
-  background-color: #ff3b30;
   margin: 0 2px 0 10px;
 }
+.sketchnote-dot.starting { background-color: #8e8e93; }   /* recorder not running yet */
+.sketchnote-dot.recording { background-color: #ff3b30; }
+.sketchnote-dot.busy { background-color: #ff9f0a; }       /* saving / transcribing */
+.sketchnote-dot.ready { background-color: #30d158; }
+.sketchnote-dot.failed { background-color: #ff3b30; }
+/* Fixed min-width so "Starting…" -> "0:03" doesn't make the pill jump. */
 .sketchnote-timer {
   color: white;
   font-family: monospace;
   font-weight: bold;
   font-size: 13px;
   padding: 0 8px 0 4px;
+  min-width: 76px;
 }
 .sketchnote-sep {
   width: 1px;
