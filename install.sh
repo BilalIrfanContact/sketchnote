@@ -6,12 +6,21 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 UUID=sketchnote@local
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
 DBUS_DIR="$HOME/.local/share/dbus-1/services"
+MODELS="${XDG_DATA_HOME:-$HOME/.local/share}/sketchnote/models"
 
-echo "== Python venv with faster-whisper"
-[ -x "$HERE/.venv/bin/python" ] || python3 -m venv "$HERE/.venv"
-"$HERE/.venv/bin/pip" install -q faster-whisper
-echo "   downloading the 'small' model (first run only)"
-"$HERE/.venv/bin/python" -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')"
+echo "== Building sketchnote (needs cargo and cmake)"
+cargo build --release --quiet --manifest-path "$HERE/Cargo.toml"
+BIN="$HERE/target/release/sketchnote"
+
+echo "== Whisper models -> $MODELS (first run only)"
+mkdir -p "$MODELS"
+for model in ggerganov/whisper.cpp/ggml-small-q8_0.bin ggml-org/whisper-vad/ggml-silero-v5.1.2.bin; do
+    file="$MODELS/${model##*/}"
+    if [ ! -f "$file" ]; then
+        curl -fL --progress-bar -o "$file.part" "https://huggingface.co/${model%/*}/resolve/main/${model##*/}"
+        mv "$file.part" "$file"
+    fi
+done
 
 echo "== GNOME Shell extension -> $EXT_DIR"
 mkdir -p "$(dirname "$EXT_DIR")"
@@ -22,7 +31,7 @@ mkdir -p "$DBUS_DIR"
 cat > "$DBUS_DIR/org.sketchnote.Service.service" <<EOF
 [D-BUS Service]
 Name=org.sketchnote.Service
-Exec=$HERE/sketchnote service
+Exec=$BIN service
 EOF
 
 # Older versions added GNOME custom shortcuts for pasting; the extension handles it now.
