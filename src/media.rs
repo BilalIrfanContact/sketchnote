@@ -63,10 +63,24 @@ fn ffmpeg() -> Command {
 
 /// Re-encodes GNOME's screencast to 30 fps H.264 and deletes the original.
 pub fn convert_video(src: &Path, dst: &Path) -> Result<()> {
-    run(ffmpeg().arg("-y").arg("-i").arg(src).args([
-        "-vf", "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264",
-        "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-an",
-    ]).arg(dst))?;
+    run(ffmpeg()
+        .arg("-y")
+        .arg("-i")
+        .arg(src)
+        .args([
+            "-vf",
+            "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+        ])
+        .arg(dst))?;
     std::fs::remove_file(src)?;
     Ok(())
 }

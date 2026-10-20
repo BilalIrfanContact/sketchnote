@@ -29,11 +29,8 @@ pub fn make_marks(events: &[Event], words: &[Word], duration: f64) -> Vec<Mark> 
             let e = &events[i];
             let start = if i == 0 { 0.0 } else { e.t };
             let end = events.get(i + 1).map_or(f64::INFINITY, |next| next.t);
-            let text: String = words
-                .iter()
-                .filter(|w| start <= w.start && w.start < end)
-                .map(|w| w.word.as_str())
-                .collect();
+            let text: String =
+                words.iter().filter(|w| start <= w.start && w.start < end).map(|w| w.word.as_str()).collect();
             Mark {
                 n: i + 1,
                 t: e.t,
