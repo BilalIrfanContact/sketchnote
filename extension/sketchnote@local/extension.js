@@ -320,7 +320,7 @@ export default class Sketchnote extends Extension {
             'BundleFailed', '/org/sketchnote/Service', null, Gio.DBusSignalFlags.NONE,
             (_c, _sender, _path, _iface, _signal, params) => this._onBundleFailed(params.deepUnpack()[0]));
         this._status = null;        // the after-capture status pill
-        this._building = null;      // bundle dir the status pill is waiting for
+        this._owner = null;         // the finished capture the status pill is about
         this._pasteLatestKey = this._grabKey(PASTE_LATEST_KEY, () => this._pasteLatest());
     }
 
@@ -328,6 +328,7 @@ export default class Sketchnote extends Extension {
         if (this._session)
             this._cancel();
         this._disarm();
+        this._owner = null;         // in-flight saves must not bring the pill back
         this._hideStatus();
         Gio.DBus.session.signal_unsubscribe(this._readyId);
         Gio.DBus.session.signal_unsubscribe(this._failedId);
@@ -398,19 +399,27 @@ export default class Sketchnote extends Extension {
         st.pill.destroy();
     }
 
+    // Status updates only apply to the latest finished capture, so an older capture
+    // finishing late can't overwrite a newer one's status.
+    _ownStatus(s, state, text, ms = 0) {
+        if (this._owner !== s)
+            return;
+        if (ms)
+            this._owner = null;     // terminal: nothing else may change it
+        this._showStatus(state, text, ms);
+    }
+
     _onBundleReady(dir) {
         this._arm(dir);
-        if (dir === this._building) {
-            this._building = null;
-            this._showStatus('ready', 'Ready · Ctrl+V to paste', STATUS_MS);
-        }
+        const s = this._owner;
+        if (s?.dir === dir)
+            this._ownStatus(s, 'ready', 'Ready · Ctrl+V to paste', STATUS_MS);
     }
 
     _onBundleFailed(dir) {
-        if (dir === this._building) {
-            this._building = null;
-            this._showStatus('failed', "Couldn't build the notes", STATUS_MS);
-        }
+        const s = this._owner;
+        if (s?.dir === dir)
+            this._ownStatus(s, 'failed', "Couldn't build the notes", STATUS_MS);
     }
 
     // --- clipboard: one Ctrl+V pastes the notes and the contact sheet ---------
@@ -518,6 +527,7 @@ export default class Sketchnote extends Extension {
         try {
             await this._stopping;
             const [dir] = await service('Start', null, '(s)');
+            s.dir = dir;
             const [ok, used] = await this._screencast(s, GLib.build_filenamev([dir, 'screencast']));
             if (!ok)
                 throw new Error('GNOME Shell refused to start the screencast');
@@ -563,6 +573,7 @@ export default class Sketchnote extends Extension {
         const end = now();
         this._session = null;
         this._hideUi();
+        this._owner = s;
         this._showStatus('busy', 'Saving…');
         this._stopping = this._save(s, end).catch(logError);
         return this._stopping;
@@ -571,7 +582,10 @@ export default class Sketchnote extends Extension {
     async _save(s, end) {
         await this._stopRecording(s);
         if (!s.video) {     // recording never started (already reported)
-            this._hideStatus();
+            if (this._owner === s) {
+                this._owner = null;
+                this._hideStatus();
+            }
             await service('Cancel').catch(logError);
             return;
         }
@@ -580,12 +594,11 @@ export default class Sketchnote extends Extension {
             mode: s.mode, area: s.area, window: s.focus, events: s.events,
         };
         try {
-            [this._building] = await service('Finish',
-                new GLib.Variant('(s)', [JSON.stringify(capture)]), '(s)');
-            this._showStatus('busy', 'Transcribing…');
+            await service('Finish', new GLib.Variant('(s)', [JSON.stringify(capture)]), '(s)');
+            this._ownStatus(s, 'busy', 'Transcribing…');    // no-op if it's already Ready
         } catch (e) {
             Main.notify('Sketchnote', `Could not save capture: ${e.message}`);
-            this._showStatus('failed', "Couldn't save the capture", STATUS_MS);
+            this._ownStatus(s, 'failed', "Couldn't save the capture", STATUS_MS);
         }
     }
 
