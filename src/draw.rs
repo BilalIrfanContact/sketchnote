@@ -2,7 +2,9 @@
 
 use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 use image::{RgbaImage, imageops};
-use tiny_skia::{Color, FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, PremultipliedColorU8, Stroke, Transform};
+use tiny_skia::{
+    Color, FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, PremultipliedColorU8, Stroke, Transform,
+};
 
 use crate::capture::{Kind, Mark, Rect};
 
@@ -116,7 +118,8 @@ pub fn contact_sheet(tiles: &[(usize, RgbaImage)]) -> RgbaImage {
     }
     let ncols = if tiles.len() > 1 { 2 } else { 1 };
     let [r, g, b] = SHEET_BG;
-    let mut sheet = RgbaImage::from_pixel(GAP + ncols * (COLUMN_WIDTH + GAP), cols[0].max(cols[1]), [r, g, b, 255].into());
+    let mut sheet =
+        RgbaImage::from_pixel(GAP + ncols * (COLUMN_WIDTH + GAP), cols[0].max(cols[1]), [r, g, b, 255].into());
     for (_, tile, x, y) in &placed {
         imageops::replace(&mut sheet, tile, *x as i64, *y as i64);
     }
@@ -188,8 +191,13 @@ fn text_centered(pm: &mut Pixmap, text: &str, cx: f32, cy: f32, size: f32, color
             let p = &mut pixels[(py * pw + px) as usize];
             let a = coverage.clamp(0.0, 1.0);
             let mix = |dst: u8, src: u8| (dst as f32 * (1.0 - a) + src as f32 * a).round() as u8;
-            *p = PremultipliedColorU8::from_rgba(mix(p.red(), color[0]), mix(p.green(), color[1]), mix(p.blue(), color[2]), 255)
-                .unwrap();
+            *p = PremultipliedColorU8::from_rgba(
+                mix(p.red(), color[0]),
+                mix(p.green(), color[1]),
+                mix(p.blue(), color[2]),
+                255,
+            )
+            .unwrap();
         });
     }
 }
@@ -215,8 +223,14 @@ mod tests {
         let area = [0.0, 0.0, 1920.0, 1080.0];
         let window = Window { app: "a".into(), title: "t".into(), rect: Some([0.0, 0.0, 1000.0, 700.0]) };
         let e = Event {
-            t: 0.0, kind: Kind::Click, t_end: None, frame_t: None, points: vec![],
-            x: Some(50.0), y: Some(50.0), window: Some(window),
+            t: 0.0,
+            kind: Kind::Click,
+            t_end: None,
+            frame_t: None,
+            points: vec![],
+            x: Some(50.0),
+            y: Some(50.0),
+            window: Some(window),
         };
         let map = Mapper::new(area, (1920, 1080));
         // Min size 640x400 centred on the click, clamped at 0.

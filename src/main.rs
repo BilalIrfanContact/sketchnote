@@ -46,7 +46,8 @@ fn main() -> ExitCode {
             Ok(())
         }
         ["transcribe", wav] => transcribe::words(wav.as_ref())
-            .and_then(|w| Ok(println!("{}", serde_json::to_string_pretty(&w)?)) ),
+            .and_then(|w| Ok(serde_json::to_string_pretty(&w)?))
+            .map(|json| println!("{json}")),
         _ => {
             eprintln!("usage: sketchnote service | latest | transcribe WAV");
             return ExitCode::from(2);
