@@ -25,7 +25,7 @@ It has two halves that talk over D-Bus (`org.sketchnote.Service`):
 cargo test                            # bundle logic
 ./target/release/sketchnote transcribe audio.wav   # words + timestamps, for tuning transcription
 tests/e2e.py speech.wav               # full run in a throwaway headless GNOME Shell
-./sketchnote latest                   # newest bundle path
+./target/release/sketchnote latest    # newest bundle path
 ```
 
 Applying changes:

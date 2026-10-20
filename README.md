@@ -43,7 +43,7 @@ Starting a capture records the whole screen and the microphone immediately. Whil
 
 After Finish, the capture is transcribed locally, which takes about 10 s for 20 s of speech on CPU. A notification says when it's ready, and the notes are now on the clipboard. Press Ctrl+V in your agent's input box: the extension pastes the notes, swaps the clipboard to the contact sheet and pastes again, so you get the text and the image from one key press. Each is an ordinary paste, so this works in any app that accepts pasted text and images. Once you copy something else, Ctrl+V is normal again; Alt+Shift+V pastes the latest capture whenever you want it back.
 
-CLI: `./sketchnote latest | service`.
+CLI: `target/release/sketchnote latest | service | transcribe file.wav`.
 
 ## Output
 
