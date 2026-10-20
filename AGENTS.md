@@ -7,7 +7,7 @@ Sketchnote is a Linux (GNOME 50, Wayland) take on [Scrawl](https://scrawl.kitlan
 It has two halves that talk over D-Bus (`org.sketchnote.Service`):
 
 - **GNOME Shell extension** (`extension/sketchnote@local/extension.js`, GJS). Hotkey, edge glow, pill, live ink, pins, click logging, screen recording through GNOME Shell's Screencast service, and the one-key paste. It has to stay JavaScript inside the Shell; that's what avoids portal prompts and lets it draw over apps and paste.
-- **Python service** (`service.py`, `bundle.py`, `transcribe.py`, `sketchnote` CLI). Records the mic with `pw-record`, transcribes with faster-whisper (`small`, int8, CPU) in `.venv`, and builds the bundle in `~/.local/share/sketchnote/captures/`.
+- **Rust service** (`src/`, the `sketchnote` binary). Records the mic with `pw-record`, transcribes in-process with whisper.cpp through `whisper-rs` (`small` q8_0, English, CPU, DTW word timestamps), and builds the bundle in `~/.local/share/sketchnote/captures/`. Models live in `~/.local/share/sketchnote/models/`.
 
 `README.md` covers usage, output format, and the decisions made where Scrawl's behaviour was unknown.
 
@@ -21,15 +21,16 @@ It has two halves that talk over D-Bus (`org.sketchnote.Service`):
 ## Local development commands
 
 ```bash
-./install.sh                          # venv, extension symlink, D-Bus activation file; safe to re-run
-python3 -m unittest discover tests    # bundle logic
+./install.sh                          # cargo build, models, extension symlink, D-Bus activation file; safe to re-run
+cargo test                            # bundle logic
+./target/release/sketchnote transcribe audio.wav   # words + timestamps, for tuning transcription
 tests/e2e.py speech.wav               # full run in a throwaway headless GNOME Shell
 ./sketchnote latest                   # newest bundle path
 ```
 
 Applying changes:
 
-- **Python service:** restart it when no capture is running (`pkill -f "/sketchnote service$"`); D-Bus starts it again on demand.
+- **Rust service:** `cargo build --release`, then restart it when no capture is running (`pkill -f "/sketchnote service$"`); D-Bus starts it again on demand.
 - **Extension:** GNOME on Wayland only reloads extensions at login, so the user must log out and back in. Test extension changes in the headless shell via `tests/e2e.py` first, and say clearly when a change needs a logout.
 
 Do not run dependency installation or other expensive setup commands unless verification requires them or the user explicitly requests them. The e2e test never touches the user's real session; anything that does (clipboard, gsettings, restarting the service) should be mentioned to the user.

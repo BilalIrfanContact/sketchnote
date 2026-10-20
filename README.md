@@ -14,13 +14,13 @@ Then **log out and back in once**. GNOME on Wayland only discovers new extension
 
 `install.sh` does three things:
 
-- Creates `.venv` with faster-whisper and downloads the `small` model.
+- Builds the `sketchnote` binary with cargo and downloads the Whisper `small` model (264 MB) and a voice detector into `~/.local/share/sketchnote/models/`.
 - Symlinks `extension/sketchnote@local` into `~/.local/share/gnome-shell/extensions/` and enables it.
 - Writes a D-Bus activation file so the service starts on demand.
 
 It is safe to re-run.
 
-Requirements, all present on Ubuntu with GNOME 50: `ffmpeg` (with libx264), `pw-record`, `notify-send`, and python3 with PyGObject and Pillow.
+Requirements: a Rust toolchain and `cmake` to build (whisper.cpp is compiled in), plus `ffmpeg` (with libx264), `pw-record` and `notify-send`, which Ubuntu with GNOME 50 already has.
 
 ## Use
 
@@ -41,7 +41,7 @@ Starting a capture records the whole screen and the microphone immediately. Whil
 - A stop icon appears in the top bar.
 - A pill at top centre shows the timer and **Area / Window / Screen** for 3 seconds. Picking **Window** or **Area** restarts the capture on that target, and Area lets you drag a rectangle. The pill then switches to **Undo / Cancel / Finish**.
 
-After Finish, the capture is transcribed locally, which takes about 20 s for 30 s of speech on CPU. A notification says when it's ready, and the notes are now on the clipboard. Press Ctrl+V in your agent's input box: the extension pastes the notes, swaps the clipboard to the contact sheet and pastes again, so you get the text and the image from one key press. Each is an ordinary paste, so this works in any app that accepts pasted text and images. Once you copy something else, Ctrl+V is normal again; Alt+Shift+V pastes the latest capture whenever you want it back.
+After Finish, the capture is transcribed locally, which takes about 10 s for 20 s of speech on CPU. A notification says when it's ready, and the notes are now on the clipboard. Press Ctrl+V in your agent's input box: the extension pastes the notes, swaps the clipboard to the contact sheet and pastes again, so you get the text and the image from one key press. Each is an ordinary paste, so this works in any app that accepts pasted text and images. Once you copy something else, Ctrl+V is normal again; Alt+Shift+V pastes the latest capture whenever you want it back.
 
 CLI: `./sketchnote latest | service`.
 
@@ -70,10 +70,12 @@ Each capture is a folder `~/.local/share/sketchnote/captures/<timestamp>.bundle/
 ## How it's built
 
 - **`extension/sketchnote@local/extension.js`** (GNOME Shell extension). It handles the hotkey, glow, pill, live ink, pins, click logging, undo, cancel and area picking. It records the screen through GNOME Shell's own Screencast service. Only the Shell may call that service, so there's no portal prompt and the recording code lives in the extension.
-- **`service.py`** (D-Bus `org.sketchnote.Service`). It records the mic with `pw-record` and builds the bundle on Finish.
-- **`bundle.py`**. Converts the video, turns events into marks, assigns speech to marks, and draws keyframes, crops, the contact sheet and `summary.md`.
-- **`transcribe.py`**. faster-whisper `small`, int8, with word timestamps. It runs in `.venv`.
-- **`sketchnote`**. The CLI entry point.
+- **The `sketchnote` binary** (Rust, `src/`). `sketchnote service` is the D-Bus service `org.sketchnote.Service`, started on demand:
+  - `service.rs` records the mic with `pw-record` and builds the bundle on Finish.
+  - `bundle.rs` converts the video with ffmpeg and writes the bundle.
+  - `notes.rs` turns events into marks, assigns speech to them and writes `summary.md`.
+  - `draw.rs` draws keyframes, crops and the contact sheet.
+  - `transcribe.rs` runs whisper.cpp (`small`, 8-bit) in-process, with word timestamps.
 
 To rename, change `sketchnote`/`org.sketchnote` in those files, the extension uuid, and `install.sh`.
 
@@ -102,13 +104,13 @@ These are the simplest options, picked deliberately. Change them freely.
 - **Pill placement.** The pill sits on the primary monitor. Screen mode records all monitors as one image.
 - **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`. The mic starts within about 0.1 s, and both offsets are stored and applied. I've seen it take 14 s once. If you cancel or finish and immediately start again, the new capture waits for the previous recording to stop before it starts recording.
 - **Missed clicks.** Clicks are detected by polling every 10 ms, so a press shorter than that could be missed.
-- **Heavy work runs niced.** Transcription and video conversion use `nice -n 10` and half the CPU cores, so the desktop stays responsive while a bundle builds.
-- **CPU transcription.** It takes roughly 0.6× real time plus about 3 s to load the model. Set `SKETCHNOTE_MODEL=base` in the D-Bus service file's environment if you want it faster.
+- **Heavy work runs niced.** Building a bundle runs at nice 10, and transcription uses half the CPU cores, so the desktop stays responsive.
+- **CPU transcription, English only.** It takes roughly 0.5× real time. The language is fixed to English, because auto-detection was slower and sometimes picked the wrong language. To try another whisper.cpp model, set `SKETCHNOTE_MODEL=/path/to/ggml-model.bin` in the D-Bus service file's environment. `sketchnote transcribe file.wav` prints a recording's words with timestamps.
 
 ## Tests
 
 ```sh
-python3 -m unittest discover tests     # bundle logic (marks, speech split, crops, layout)
+cargo test                             # bundle logic (marks, speech split, crops, layout)
 tests/e2e.py speech.wav                # full run in a throwaway headless GNOME Shell
 ```
 

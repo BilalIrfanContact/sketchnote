@@ -3,7 +3,7 @@
 // Alt+Shift+S starts a capture (or finishes the running one). The screen is recorded
 // with GNOME Shell's own Screencast service (no portal prompt; only the Shell may call
 // it, which is why recording lives here). The microphone and everything after Finish
-// live in the Python service (org.sketchnote.Service) on the session bus.
+// live in the Rust service (org.sketchnote.Service) on the session bus.
 //
 // While capturing:  hold Space + drag  = red stroke (fades on screen, kept in output)
 //                   Space + click      = numbered pin
