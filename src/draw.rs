@@ -69,8 +69,15 @@ pub fn draw_mark(img: &mut RgbaImage, mark: &Mark, map: &Mapper) {
 }
 
 /// Box (x0, y0, x1, y1) in recording pixels around the mark's activity: padded,
-/// grown to a readable minimum, clamped to the mark's window and the recording.
-pub fn crop_box(mark: &Mark, area: Rect, map: &Mapper, video_size: (u32, u32)) -> (u32, u32, u32, u32) {
+/// grown to a readable minimum, clamped to the mark's window and the recording. If the
+/// activity is all below `pill` (Sketchnote's own UI), the box starts below it too.
+pub fn crop_box(
+    mark: &Mark,
+    area: Rect,
+    pill: Option<Rect>,
+    map: &Mapper,
+    video_size: (u32, u32),
+) -> (u32, u32, u32, u32) {
     let (w, h) = video_size;
     let e = &mark.event;
     let pts = e.spots();
@@ -79,8 +86,16 @@ pub fn crop_box(mark: &Mark, area: Rect, map: &Mapper, video_size: (u32, u32)) -
     }
     let xs = pts.iter().map(|p| p[0]);
     let ys = pts.iter().map(|p| p[1]);
+    let top = ys.clone().fold(f64::MAX, f64::min);
     let (x0, x1) = grow(xs.clone().fold(f64::MAX, f64::min) - PAD, xs.fold(f64::MIN, f64::max) + PAD, MIN_CROP.0);
-    let (y0, y1) = grow(ys.clone().fold(f64::MAX, f64::min) - PAD, ys.fold(f64::MIN, f64::max) + PAD, MIN_CROP.1);
+    let (mut y0, mut y1) = grow(top - PAD, ys.fold(f64::MIN, f64::max) + PAD, MIN_CROP.1);
+    if let Some([px, py, pw, ph]) = pill {
+        let below = py + ph;
+        if top >= below && y0 < below && x0 < px + pw && px < x1 {
+            y0 = below;
+            y1 = y1.max(below + MIN_CROP.1);
+        }
+    }
     let mut b = [area[0], area[1], area[0] + area[2], area[1] + area[3]];
     if let Some([wx, wy, ww, wh]) = e.window.as_ref().and_then(|w| w.rect) {
         b = [b[0].max(wx), b[1].max(wy), b[2].min(wx + ww), b[3].min(wy + wh)];
@@ -104,22 +119,21 @@ fn grow(a: f64, b: f64, size: f64) -> (f64, f64) {
     (mid - size / 2.0, mid + size / 2.0)
 }
 
-/// Two-column masonry of `(number, tile)`: each tile goes into the shorter column
-/// and gets a number badge in its top-right corner.
+/// `(number, tile)`s in rows of two, so they read in order (#1 #2, then #3 #4, ...),
+/// each scaled to the column width with a number badge in its top-right corner.
 pub fn contact_sheet(tiles: &[(usize, RgbaImage)]) -> RgbaImage {
-    let mut cols = [GAP, GAP];
-    let mut placed = vec![];
-    for (n, tile) in tiles {
-        let th = ((tile.height() as f64 * COLUMN_WIDTH as f64 / tile.width() as f64).round() as u32).max(1);
-        let c = if cols[0] <= cols[1] { 0 } else { 1 };
-        let resized = imageops::resize(tile, COLUMN_WIDTH, th, imageops::FilterType::Lanczos3);
-        placed.push((*n, resized, GAP + c as u32 * (COLUMN_WIDTH + GAP), cols[c]));
-        cols[c] += th + GAP;
-    }
+    let resized: Vec<_> = tiles
+        .iter()
+        .map(|(n, tile)| {
+            let th = ((tile.height() as f64 * COLUMN_WIDTH as f64 / tile.width() as f64).round() as u32).max(1);
+            (*n, imageops::resize(tile, COLUMN_WIDTH, th, imageops::FilterType::Lanczos3))
+        })
+        .collect();
+    let (spots, height) = layout(&resized.iter().map(|(_, t)| t.height()).collect::<Vec<_>>());
+    let placed: Vec<_> = resized.into_iter().zip(spots).map(|((n, tile), (x, y))| (n, tile, x, y)).collect();
     let ncols = if tiles.len() > 1 { 2 } else { 1 };
     let [r, g, b] = SHEET_BG;
-    let mut sheet =
-        RgbaImage::from_pixel(GAP + ncols * (COLUMN_WIDTH + GAP), cols[0].max(cols[1]), [r, g, b, 255].into());
+    let mut sheet = RgbaImage::from_pixel(GAP + ncols * (COLUMN_WIDTH + GAP), height, [r, g, b, 255].into());
     for (_, tile, x, y) in &placed {
         imageops::replace(&mut sheet, tile, *x as i64, *y as i64);
     }
@@ -132,6 +146,19 @@ pub fn contact_sheet(tiles: &[(usize, RgbaImage)]) -> RgbaImage {
         }
     });
     sheet
+}
+
+/// Top-left corner of each tile (given their heights) in rows of two, and the sheet height.
+fn layout(heights: &[u32]) -> (Vec<(u32, u32)>, u32) {
+    let mut spots = vec![];
+    let mut y = GAP;
+    for row in heights.chunks(2) {
+        for c in 0..row.len() as u32 {
+            spots.push((GAP + c * (COLUMN_WIDTH + GAP), y));
+        }
+        y += row.iter().max().unwrap() + GAP;
+    }
+    (spots, y)
 }
 
 // --- drawing helpers ----------------------------------------------------------
@@ -234,7 +261,40 @@ mod tests {
         };
         let map = Mapper::new(area, (1920, 1080));
         // Min size 640x400 centred on the click, clamped at 0.
-        assert_eq!(crop_box(&mark(e), area, &map, (1920, 1080)), (0, 0, 370, 250));
+        assert_eq!(crop_box(&mark(e), area, None, &map, (1920, 1080)), (0, 0, 370, 250));
+    }
+
+    #[test]
+    fn crop_starts_below_the_pill() {
+        let area = [0.0, 0.0, 1920.0, 1080.0];
+        let pill = Some([800.0, 40.0, 320.0, 36.0]);
+        let at = |y: f64| Event {
+            t: 0.0,
+            kind: Kind::Pin,
+            t_end: None,
+            frame_t: None,
+            points: vec![],
+            x: Some(960.0),
+            y: Some(y),
+            window: None,
+        };
+        let map = Mapper::new(area, (1920, 1080));
+        // A pin under the pill: the crop would reach y = 0, now starts at the pill's bottom.
+        assert_eq!(crop_box(&mark(at(150.0)), area, pill, &map, (1920, 1080)), (640, 76, 1280, 476));
+        // A pin beside the pill is kept as is: cropping the pill out would cut the mark.
+        assert_eq!(crop_box(&mark(at(50.0)), area, pill, &map, (1920, 1080)).1, 0);
+    }
+
+    #[test]
+    fn layout_keeps_reading_order() {
+        // A tall #1 next to a short #2 used to pull #3 up beside #1, above #4.
+        let (spots, height) = layout(&[300, 50, 50, 50, 80]);
+        let (left, right) = (GAP, GAP + COLUMN_WIDTH + GAP);
+        assert_eq!(
+            spots,
+            [(left, GAP), (right, GAP), (left, 2 * GAP + 300), (right, 2 * GAP + 300), (left, 3 * GAP + 350)]
+        );
+        assert_eq!(height, 4 * GAP + 430);
     }
 
     #[test]

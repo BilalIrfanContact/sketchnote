@@ -5,7 +5,7 @@
 //!     audio.wav            microphone, 16 kHz mono
 //!     frames-full/NN.png   full keyframe per mark, annotations burned in
 //!     frames/frame-NN.png  the same keyframe cropped to the activity
-//!     contact-sheet.png    cropped keyframes in a two-column grid with number badges
+//!     contact-sheet.png    cropped keyframes in rows of two, in order, with number badges
 //!     summary.md           the notes that Ctrl+V / Alt+Shift+V paste
 //!     sketchnote.json      capture data: timings, strokes, events, target, words, marks
 
@@ -44,7 +44,7 @@ pub fn build(dir: &Path, capture: &Capture, audio_t0: f64) -> Result<()> {
     for mark in &notes.marks {
         let mut frame = media::grab_frame(&video, mark.frame_t - video_offset)?;
         draw_mark(&mut frame, mark, &map);
-        let (x0, y0, x1, y1) = crop_box(mark, capture.area, &map, video_size);
+        let (x0, y0, x1, y1) = crop_box(mark, capture.area, capture.pill, &map, video_size);
         let tile = imageops::crop_imm(&frame, x0, y0, x1 - x0, y1 - y0).to_image();
         let name = format!("frame-{:02}.png", mark.n);
         save_rgb(&frame, &dir.join("frames-full").join(&name))?;

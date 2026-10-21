@@ -18,6 +18,9 @@ pub struct Capture {
     pub video: String,
     /// Recorded region in stage coordinates: the whole stage, all monitors.
     pub area: Rect,
+    /// Where Sketchnote's pill sat during the capture, to keep it out of keyframes.
+    #[serde(default)]
+    pub pill: Option<Rect>,
     /// Focused window when the capture started.
     pub window: Option<Window>,
     pub events: Vec<Event>,
