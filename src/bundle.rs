@@ -55,7 +55,7 @@ pub fn build(dir: &Path, capture: &Capture, audio_t0: f64) -> Result<()> {
 
     fs::write(dir.join("summary.md"), notes::summary(&marks))?;
     let data = json!({
-        "duration": duration, "mode": capture.mode, "area": capture.area,
+        "duration": duration, "area": capture.area,
         "target": notes::main_target(capture), "video_offset": video_offset,
         "audio_offset": audio_offset, "events": capture.events, "words": words, "marks": marks,
     });
