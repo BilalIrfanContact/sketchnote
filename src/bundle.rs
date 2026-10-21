@@ -8,27 +8,52 @@
 //!     contact-sheet.png    cropped keyframes in rows of two, in order, with number badges
 //!     summary.md           the notes that Ctrl+V / Alt+Shift+V paste
 //!     sketchnote.json      capture data: timings, strokes, events, target, words, marks
+//!     finish.json          what the extension sent on Finish, so a failed build can be retried
+//!     error.txt            why the last build failed (removed once one succeeds)
 
 use std::fs;
 use std::path::Path;
 
 use anyhow::Result;
 use image::{DynamicImage, imageops};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::capture::{Capture, Word};
 use crate::draw::{Mapper, contact_sheet, crop_box, draw_mark};
+use crate::fix::Fix;
 use crate::{media, notes, transcribe};
 
-/// Writes the full bundle into `dir`. `audio_t0` is when the mic started (µs, monotonic).
-pub fn build(dir: &Path, capture: &Capture, audio_t0: f64) -> Result<()> {
+/// Everything `build` needs besides the recordings, saved as `finish.json` on Finish.
+#[derive(Serialize, Deserialize)]
+pub struct Finished {
+    pub capture: Capture,
+    /// When the mic started (µs, monotonic).
+    pub mic_t0: f64,
+}
+
+pub fn save_finished(dir: &Path, finished: &Finished) -> Result<()> {
+    fs::write(dir.join("finish.json"), serde_json::to_string(finished)?)?;
+    Ok(())
+}
+
+/// Writes the full bundle into `dir` from its `finish.json` and recordings. Safe to run
+/// again after a failure: steps that already finished are redone or reused.
+pub fn build(dir: &Path) -> Result<()> {
+    let finished: Finished = serde_json::from_slice(&fs::read(dir.join("finish.json"))?)?;
+    let (capture, audio_t0) = (&finished.capture, finished.mic_t0);
     let t0 = capture.t0;
     let video_offset = (capture.video_t0 - t0) / 1e6;
     let audio_offset = (audio_t0 - t0) / 1e6;
     let duration = (capture.end - t0) / 1e6;
 
     let video = dir.join("recording.mp4");
-    media::convert_video(Path::new(&capture.video), &video)?;
+    // Converting deletes GNOME's raw recording, so on a retry it may be done already.
+    if Path::new(&capture.video).exists() {
+        media::convert_video(Path::new(&capture.video), &video)?;
+    } else if !video.exists() {
+        Err(Fix("The screen recording is missing, so this capture can't be built.".into()))?;
+    }
     let video_size = media::probe_size(&video)?;
 
     let words: Vec<Word> = transcribe::words(&dir.join("audio.wav"))?

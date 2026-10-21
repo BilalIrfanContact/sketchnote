@@ -9,6 +9,7 @@ use whisper_rs::{
 };
 
 use crate::capture::Word;
+use crate::fix::Fix;
 
 /// Whisper `small`, 8-bit quantized: the same model faster-whisper ran before.
 pub const MODEL: &str = "ggml-small-q8_0.bin";
@@ -29,6 +30,12 @@ pub fn words(wav: &Path) -> Result<Vec<Word>> {
     }
     let model = std::env::var("SKETCHNOTE_MODEL").map_or_else(|_| models_dir().join(MODEL), PathBuf::from);
     let vad = models_dir().join(VAD_MODEL);
+    if !model.exists() || !vad.exists() {
+        Err(Fix(format!(
+            "The speech model is missing from {}. Run install.sh to download it, then retry.",
+            models_dir().display()
+        )))?;
+    }
     whisper_rs::install_logging_hooks(); // keep whisper.cpp's chatter out of the journal
     // DTW timestamps: much closer to when each word was actually said than whisper's own.
     let mut cp = WhisperContextParameters::default();

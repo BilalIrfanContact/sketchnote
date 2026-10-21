@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 /// `[x, y, width, height]`
 pub type Rect = [f64; 4];
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Capture {
     pub t0: f64,
     pub end: f64,

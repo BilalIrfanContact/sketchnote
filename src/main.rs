@@ -7,6 +7,7 @@
 mod bundle;
 mod capture;
 mod draw;
+mod fix;
 mod media;
 mod notes;
 mod service;
