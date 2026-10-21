@@ -22,7 +22,7 @@ use serde_json::json;
 use crate::capture::{Capture, Word};
 use crate::draw::{Mapper, contact_sheet, crop_box, draw_mark};
 use crate::fix::Fix;
-use crate::{media, notes, transcribe};
+use crate::{media, notes};
 
 /// Everything `build` needs besides the recordings, saved as `finish.json` on Finish.
 #[derive(Serialize, Deserialize)]
@@ -56,8 +56,7 @@ pub fn build(dir: &Path) -> Result<()> {
     }
     let video_size = media::probe_size(&video)?;
 
-    let model = crate::configured_model()?;
-    let words: Vec<Word> = transcribe::words(&dir.join("audio.wav"), &model)?
+    let words: Vec<Word> = crate::transcribe(&dir.join("audio.wav"))?
         .into_iter()
         .map(|w| Word { start: w.start + audio_offset, end: w.end + audio_offset, ..w })
         .collect();

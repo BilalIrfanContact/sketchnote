@@ -4,12 +4,15 @@
 //!     sketchnote latest            print the latest finished bundle's path
 //!     sketchnote transcribe WAV    print a 16 kHz mono WAV's words with timestamps, as JSON
 //!     sketchnote download-model    download the speech model set in config.toml, if missing
+//!     sketchnote set-key           store the API key for the [api] url in config.toml
 
+mod api;
 mod bundle;
 mod capture;
 mod config;
 mod draw;
 mod fix;
+mod key;
 mod media;
 mod notes;
 mod service;
@@ -44,6 +47,15 @@ fn configured_model() -> Result<transcribe::Model> {
     transcribe::Model::parse(&config::load()?.local.model)
 }
 
+/// A WAV's words with timestamps, from the transcriber set in config.toml.
+pub fn transcribe(wav: &std::path::Path) -> Result<Vec<capture::Word>> {
+    let config = config::load()?;
+    match config.transcriber {
+        config::Transcriber::Local => transcribe::words(wav, &transcribe::Model::parse(&config.local.model)?),
+        config::Transcriber::Api => api::words(wav, &config.api),
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result: Result<()> = match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
@@ -52,13 +64,13 @@ fn main() -> ExitCode {
             println!("{}", latest().map(|p| p.display().to_string()).unwrap_or_default());
             Ok(())
         }
-        ["transcribe", wav] => configured_model()
-            .and_then(|model| transcribe::words(wav.as_ref(), &model))
-            .and_then(|w| Ok(serde_json::to_string_pretty(&w)?))
-            .map(|json| println!("{json}")),
+        ["transcribe", wav] => {
+            transcribe(wav.as_ref()).and_then(|w| Ok(serde_json::to_string_pretty(&w)?)).map(|json| println!("{json}"))
+        }
         ["download-model"] => configured_model().and_then(|model| transcribe::download(&model)),
+        ["set-key"] => config::load().and_then(|config| key::set_interactively(&config.api.url)),
         _ => {
-            eprintln!("usage: sketchnote service | latest | transcribe WAV | download-model");
+            eprintln!("usage: sketchnote service | latest | transcribe WAV | download-model | set-key");
             return ExitCode::from(2);
         }
     };

@@ -31,6 +31,28 @@ model = "large-v3-turbo-q8_0"
 
 then run `./target/release/sketchnote download-model` (or `./install.sh` again) to download it. The next capture uses it; nothing needs restarting. Names are a size (`tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`), optionally `.en` for an English-only model and `-q5_0`/`-q5_1`/`-q8_0` for a smaller file, as listed on [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main). Bigger models hear you better and take longer: on a laptop CPU, 30 s of speech took 2 s with `tiny-q8_0` and 26 s with the default `small-q8_0`.
 
+### Transcribing through an API instead
+
+A transcription API runs a bigger model in about a second, so you get better notes without waiting on your CPU. It sends the **microphone recording** (never the screen recording) to that provider. Any OpenAI-compatible server works if its model returns word timings, which the notes need:
+
+| Provider | `url` | `model` | Price |
+|---|---|---|---|
+| [Groq](https://console.groq.com) (default) | `https://api.groq.com/openai/v1` | `whisper-large-v3-turbo`, or `whisper-large-v3` for a little more accuracy | about $0.04 per hour of audio |
+| OpenAI | `https://api.openai.com/v1` | `whisper-1` (OpenAI shuts it down on 2027-02-26; its newer models give no word timings) | $0.36 per hour |
+| [Speaches](https://github.com/speaches-ai/speaches) on your own machine | e.g. `http://localhost:8000/v1` | e.g. `Systran/faster-whisper-large-v3` | free |
+
+```toml
+transcriber = "api"
+
+[api]
+url = "https://api.groq.com/openai/v1"
+model = "whisper-large-v3-turbo"
+```
+
+APIs tend to stretch each word over the silence around it, which would hide the pauses Sketchnote uses to split a sentence between the things you circled. So the returned words are re-timed on your machine against the speech the local voice detector finds in the recording.
+
+Then run `./target/release/sketchnote set-key` and paste your API key. It's stored in your desktop keyring (GNOME Keyring), one per `url`, never in the config file; leave it empty to remove it. If the provider rejects the key, runs out of credit or can't be reached, the notification says so, and Retry tries again once you've fixed it. `transcriber = "local"` (or no line at all) goes back to the model on your machine.
+
 Requirements: a Rust toolchain and `cmake` to build (whisper.cpp is compiled in), plus `ffmpeg` (with libx264), `pw-record` and `notify-send`, which Ubuntu with GNOME 50 already has.
 
 ## Use
@@ -84,7 +106,7 @@ Each capture is a folder `~/.local/share/sketchnote/captures/<timestamp>.bundle/
 
 ## Privacy
 
-A capture records your **whole screen** (every monitor, whatever is on it) and your **microphone**, from Alt+Shift+S until you finish or cancel. Everything stays on your machine: transcription runs locally, and nothing is uploaded. Only what you paste leaves, and only to wherever you paste it.
+A capture records your **whole screen** (every monitor, whatever is on it) and your **microphone**, from Alt+Shift+S until you finish or cancel. By default everything stays on your machine: transcription runs locally, and nothing is uploaded. Only what you paste leaves, and only to wherever you paste it. If you [switch to a transcription API](#transcribing-through-an-api-instead), each capture's microphone recording is sent to that provider to be transcribed, under its own data policy; the screen recording and images still never leave.
 
 Captures are kept for **one day**. The service deletes any capture folder that hasn't changed in 24 hours, checking when it starts and every hour after. Cancelling a capture deletes it straight away. To delete everything sooner, remove `~/.local/share/sketchnote/captures/`. The retention period is `KEEP_CAPTURES` in `src/service.rs`; there's no settings UI.
 

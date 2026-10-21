@@ -2,8 +2,14 @@
 //! `~/.config/sketchnote/config.toml`. Every key is optional and a missing file means
 //! the defaults. It's read at the start of each build, so edits apply to the next capture.
 //!
+//!     transcriber = "local"   # "local" (on this machine) or "api" (a transcription API)
+//!
 //!     [local]
 //!     model = "small-q8_0"    # whisper.cpp model, see transcribe::Model
+//!
+//!     [api]                   # any OpenAI-compatible server, see api.rs
+//!     url = "https://api.groq.com/openai/v1"
+//!     model = "whisper-large-v3-turbo"
 
 use std::path::PathBuf;
 
@@ -15,7 +21,17 @@ use crate::fix::Fix;
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
+    pub transcriber: Transcriber,
     pub local: Local,
+    pub api: Api,
+}
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Transcriber {
+    #[default]
+    Local,
+    Api,
 }
 
 /// The built-in transcriber.
@@ -28,6 +44,20 @@ pub struct Local {
 impl Default for Local {
     fn default() -> Self {
         Local { model: "small-q8_0".into() }
+    }
+}
+
+/// A transcription API. Groq by default: it's fast, cheap and returns word timings.
+#[derive(Debug, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Api {
+    pub url: String,
+    pub model: String,
+}
+
+impl Default for Api {
+    fn default() -> Self {
+        Api { url: "https://api.groq.com/openai/v1".into(), model: "whisper-large-v3-turbo".into() }
     }
 }
 
@@ -63,5 +93,8 @@ mod tests {
         assert_eq!(parse("").unwrap().local.model, "small-q8_0");
         assert_eq!(parse("[local]\nmodel = \"large-v3-turbo-q8_0\"").unwrap().local.model, "large-v3-turbo-q8_0");
         assert!(parse("[local]\nmodle = \"tiny\"").is_err());
+        let api = parse("transcriber = \"api\"\n[api]\nmodel = \"whisper-1\"").unwrap();
+        assert_eq!(api.transcriber, Transcriber::Api);
+        assert_eq!((api.api.url.as_str(), api.api.model.as_str()), ("https://api.groq.com/openai/v1", "whisper-1"));
     }
 }
