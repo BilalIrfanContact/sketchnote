@@ -16,7 +16,7 @@ Clicks I made just to move between apps became numbered notes with one word or n
 
 ## Decision
 
-whisper.cpp now punctuates (see [the Rust service entry](2026-10-21-rust-service.md)), so sentence ends are a signal I can trust. Speech is split into sentences at `.`, `?` and `!`, and each whole sentence goes to the mark whose span (from it until the next mark) it overlaps most. Strokes and pins are always numbered. A click is numbered only if a sentence lands on it. Otherwise it stays in the notes as an unnumbered `- (0:07) [clicked]` line, with no keyframe.
+whisper.cpp now punctuates (see [the Rust service entry](2026-10-21-rust-service.md)), so sentence ends are a signal I can trust. Speech is split into sentences at `.`, `?` and `!`, and each whole sentence goes to the mark whose span (from it until the next mark) it overlaps most. Strokes and pins are always numbered. A click is numbered only if a sentence lands on it. Otherwise it stays in the notes as an unnumbered `- (0:07) [clicked]` line, with no keyframe. The exception is a capture with only clicks and no speech on any of them: then every click keeps its number, since otherwise there would be no images at all.
 
 ```mermaid
 flowchart LR
@@ -42,7 +42,7 @@ The same example now reads:
 - #2 (0:09) “Then the header font is too big.”
 ```
 
-Words with no sentence end after them fall back to the old time split. That covers older transcripts without punctuation and an unfinished sentence at the end of a capture.
+Words with no sentence end after them fall back to the old time split, each word going to the mark it starts in. That covers older transcripts without punctuation and an unfinished sentence at the end of a capture.
 
 ## Evidence
 

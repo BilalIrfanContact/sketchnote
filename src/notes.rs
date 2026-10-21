@@ -16,8 +16,8 @@ pub struct Notes {
 /// event whose span (from it until the next event) it overlaps most, so a sentence is
 /// never cut in two. Unpunctuated speech is split by time instead. Speech before the first event counts toward the first. Strokes and
 /// pins are always numbered; a click is numbered only if it got words, otherwise it is
-/// listed without a number and gets no keyframe. If nothing would be numbered, every
-/// event is. With no events at all the whole capture is one mark on the last frame.
+/// listed without a number and gets no keyframe. If nothing would be numbered (only
+/// clicks, none spoken about), every event is. With no events at all the whole capture is one mark on the last frame.
 pub fn make_notes(events: &[Event], words: &[Word], duration: f64) -> Notes {
     let mut events = events.to_vec();
     events.sort_by(|a, b| a.t.total_cmp(&b.t));
@@ -39,7 +39,10 @@ pub fn make_notes(events: &[Event], words: &[Word], duration: f64) -> Notes {
     };
     let mut texts = vec![String::new(); events.len()];
     for sentence in sentences(words) {
-        let (s, e) = (sentence[0].start, sentence[sentence.len() - 1].end.max(sentence[0].start));
+        // A loose word (no sentence end) counts only at its start, matching the old time split.
+        let last = &sentence[sentence.len() - 1];
+        let (s, e) =
+            (sentence[0].start, if ends_sentence(last) { last.end.max(sentence[0].start) } else { sentence[0].start });
         let overlap = |i: usize| {
             let (a, b) = span(i);
             if s == e { if a <= s && s < b { 1.0 } else { 0.0 } } else { (e.min(b) - s.max(a)).max(0.0) }
@@ -77,13 +80,17 @@ fn sentences(words: &[Word]) -> Vec<&[Word]> {
     let mut out = vec![];
     let mut start = 0;
     for (i, w) in words.iter().enumerate() {
-        if w.word.trim_end().ends_with(['.', '?', '!']) {
+        if ends_sentence(w) {
             out.push(&words[start..=i]);
             start = i + 1;
         }
     }
     out.extend(words[start..].chunks(1));
     out
+}
+
+fn ends_sentence(w: &Word) -> bool {
+    w.word.trim_end().ends_with(['.', '?', '!'])
 }
 
 /// The pasted notes in time order: one line per mark, e.g. `- #1 (0:16) [clicked] “hi”`,
@@ -194,6 +201,10 @@ mod tests {
         let notes = make_notes(&[stroke(1.0), stroke(2.5)], &said("look here and then this one", 0.5), 6.0);
         let texts: Vec<_> = notes.marks.iter().map(|m| m.text.as_str()).collect();
         assert_eq!(texts, ["look here and then", "this one"]);
+        // A word that starts before a silent click and runs past it stays with the stroke.
+        let long = Word { word: " there".into(), start: 1.9, end: 2.4 };
+        let notes = make_notes(&[stroke(1.0), event(Kind::Click, 2.0)], &[long], 5.0);
+        assert_eq!((notes.marks.len(), notes.silent_clicks.len()), (1, 1));
     }
 
     #[test]
