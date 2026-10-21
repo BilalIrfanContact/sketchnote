@@ -21,7 +21,7 @@ use zbus::{Connection, fdo, interface};
 
 use crate::bundle::Finished;
 use crate::capture::Capture;
-use crate::fix::{self, Fix};
+use crate::fix;
 use crate::media::{self, Mic};
 use crate::{bundle, captures_dir};
 
@@ -149,11 +149,11 @@ fn emit<B: serde::Serialize + zbus::zvariant::DynamicType>(conn: &Connection, si
     }
 }
 
-/// A D-Bus error for the extension to show: the `Fix` sentence if there is one.
+/// A D-Bus error for the extension to show: a known cause's sentence, else the error.
 fn failed(e: impl Into<anyhow::Error>) -> fdo::Error {
     let e = e.into();
     eprintln!("{e:#}");
-    fdo::Error::Failed(e.downcast_ref::<Fix>().map_or_else(|| format!("{e:#}"), |fix| fix.0.clone()))
+    fdo::Error::Failed(fix::known(&e).unwrap_or_else(|| format!("{e:#}")))
 }
 
 /// Serves until killed. Never leaves the mic running if we're stopped or GNOME Shell

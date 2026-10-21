@@ -460,7 +460,7 @@ export default class Sketchnote extends Extension {
             await service('Retry', new GLib.Variant('(s)', [dir]));
             s.building = true;
         } catch (e) {
-            notifyProblem("Couldn't retry", describe(e));
+            notifyProblem("Couldn't retry", describe(e), [['Retry', () => this._retry(dir)]]);
             this._ownStatus(s, 'failed', "Couldn't retry", STATUS_MS);
         }
     }

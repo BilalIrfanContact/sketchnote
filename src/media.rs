@@ -116,7 +116,12 @@ fn run(cmd: &mut Command) -> Result<Vec<u8>> {
         out => out.with_context(|| format!("running {cmd:?}"))?,
     };
     if !out.status.success() {
-        bail!("{cmd:?} failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        // ffmpeg reports a full disk only in its output; make it an error `fix` recognizes.
+        if stderr.contains("No space left on device") {
+            Err(std::io::Error::from(std::io::ErrorKind::StorageFull)).with_context(|| format!("{cmd:?}: {stderr}"))?;
+        }
+        bail!("{cmd:?} failed: {}", stderr.trim());
     }
     Ok(out.stdout)
 }
@@ -175,6 +180,13 @@ pub fn grab_frame(video: &Path, t: f64) -> Result<RgbaImage> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tool_running_out_of_disk_is_explained_as_a_full_disk() {
+        let e =
+            run(Command::new("sh").args(["-c", "echo 'out.mp4: No space left on device' >&2; exit 1"])).unwrap_err();
+        assert_eq!(crate::fix::known(&e).as_deref(), Some("The disk is full. Free some space, then retry."));
+    }
 
     #[test]
     fn only_near_digital_silence_counts_as_silent() {

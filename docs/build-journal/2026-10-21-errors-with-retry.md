@@ -40,7 +40,7 @@ On a private D-Bus session with a throwaway data dir, I built a fake capture (3 
 - With no models: `BundleFailed(…, 'The speech model is missing from …/models. Run install.sh to download it, then retry.')`, and `error.txt` had the same sentence. The raw video was already converted and deleted.
 - I restarted the service, linked the models in and called `Retry`: `BundleReady`, a complete bundle reusing `recording.mp4`, and `error.txt` removed. `Retry` on a path outside the captures folder was refused.
 - With ffmpeg off `PATH`: `"ffmpeg isn't installed. Install ffmpeg with your package manager, then retry."`
-- `cargo test`: 18 tests pass, including that a `Fix` is found under outer context. `tests/e2e.py` passes, so the normal Finish → Ready → paste path is unchanged.
+- `cargo test`: 19 tests pass, including that a `Fix` is found under outer context and that ffmpeg running out of disk is recognized as a full disk. `tests/e2e.py` passes, so the normal Finish → Ready → paste path is unchanged.
 
 The extension's notification and Retry button haven't been tried in a real session yet. Not measured.
 

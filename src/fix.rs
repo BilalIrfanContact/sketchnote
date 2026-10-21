@@ -18,19 +18,21 @@ impl fmt::Display for Fix {
 
 impl std::error::Error for Fix {}
 
-/// The sentence to show for `e`: its `Fix` if it has one, else a pointer to the details.
-pub fn explain(e: &anyhow::Error, details: &str) -> String {
+/// The sentence for `e` if it's a cause we know: its `Fix`, or a full disk.
+pub fn known(e: &anyhow::Error) -> Option<String> {
     if let Some(fix) = e.downcast_ref::<Fix>() {
-        return fix.0.clone();
+        return Some(fix.0.clone());
     }
     let disk_full = e
         .chain()
         .filter_map(|c| c.downcast_ref::<std::io::Error>())
         .any(|io| io.kind() == std::io::ErrorKind::StorageFull);
-    if disk_full {
-        return "The disk is full. Free some space, then retry.".into();
-    }
-    format!("Something unexpected went wrong. The details are in {details}.")
+    disk_full.then(|| "The disk is full. Free some space, then retry.".into())
+}
+
+/// The sentence to show for a failed build: a known cause, else a pointer to the details.
+pub fn explain(e: &anyhow::Error, details: &str) -> String {
+    known(e).unwrap_or_else(|| format!("Something unexpected went wrong. The details are in {details}."))
 }
 
 #[cfg(test)]
