@@ -59,7 +59,7 @@ impl Mic {
         f.seek(SeekFrom::Start(len - want - (len - WAV_HEADER) % 2))?;
         let mut buf = vec![0; want as usize];
         f.read_exact(&mut buf)?;
-        Ok(silent(&buf.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect::<Vec<_>>()))
+        Ok(silent(&buf.as_chunks::<2>().0.iter().map(|&b| i16::from_le_bytes(b)).collect::<Vec<_>>()))
     }
 
     /// SIGINT lets pw-record finish the WAV header; kill it if it hangs.
