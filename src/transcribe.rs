@@ -82,7 +82,8 @@ pub fn words(wav: &Path) -> Result<Vec<Word>> {
 
 /// Drops whisper's non-speech tags like `[BLANK_AUDIO]`, `[wind blowing]` or `(laughs)`.
 /// With one segment per word, a tag can arrive split over a few words. An opening bracket
-/// that isn't closed within `MAX_TAG_WORDS` is kept as speech.
+/// that isn't closed within `MAX_TAG_WORDS`, or before the next opening bracket, is kept
+/// as speech.
 fn drop_sound_tags(words: Vec<Word>) -> Vec<Word> {
     const MAX_TAG_WORDS: usize = 6;
     let mut kept = vec![];
@@ -94,8 +95,12 @@ fn drop_sound_tags(words: Vec<Word>) -> Vec<Word> {
             Some('(') => Some(')'),
             _ => None,
         };
-        let end =
-            closer.and_then(|c| (i..words.len().min(i + MAX_TAG_WORDS)).find(|&j| words[j].word.trim().ends_with(c)));
+        let opens = |w: &Word| w.word.trim_start().starts_with(['[', '(']);
+        let end = closer.and_then(|c| {
+            (i..words.len().min(i + MAX_TAG_WORDS))
+                .take_while(|&j| j == i || !opens(&words[j]))
+                .find(|&j| words[j].word.trim().ends_with(c))
+        });
         match end {
             Some(j) => i = j + 1,
             None => {
@@ -123,11 +128,26 @@ mod tests {
 
     #[test]
     fn sound_tags_are_dropped_even_when_split_over_words() {
-        let words: Vec<Word> = [" [wind", " blowing]", " This", " is", " [MUSIC]", " fine", " (laughs)", " ok", " [so"]
-            .iter()
-            .map(|w| Word { word: w.to_string(), start: 0.0, end: 0.0 })
-            .collect();
+        let words: Vec<Word> = [
+            " [wind",
+            " blowing]",
+            " This",
+            " is",
+            " [MUSIC]",
+            " fine",
+            " (laughs)",
+            " ok",
+            " [so",
+            " use",
+            " [MUSIC]",
+            " it",
+            " [so",
+        ]
+        .iter()
+        .map(|w| Word { word: w.to_string(), start: 0.0, end: 0.0 })
+        .collect();
         let kept: Vec<_> = drop_sound_tags(words).into_iter().map(|w| w.word).collect();
-        assert_eq!(kept, [" This", " is", " fine", " ok", " [so"]); // an unclosed bracket stays
+        // An unclosed bracket stays, and doesn't swallow speech up to a later tag.
+        assert_eq!(kept, [" This", " is", " fine", " ok", " [so", " use", " it", " [so"]);
     }
 }
