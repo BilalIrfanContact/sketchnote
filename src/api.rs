@@ -94,6 +94,7 @@ fn parse(text: &str, key: Option<&str>, host: &str) -> Result<Transcript> {
             redact(&e.to_string(), key),
             redact(text, key)
         )
+        .context(Fix(format!("{host} sent back a response Sketchnote can't read. Retry, or check its status page.")))
     })
 }
 
@@ -218,6 +219,10 @@ mod tests {
         let e = parse(r#"{"words":"gsk_secret"}"#, Some("gsk_secret"), "api.groq.com").err().unwrap();
         assert!(!format!("{e:#}").contains("gsk_secret"));
         assert!(format!("{e:#}").contains("[API key]"));
+        assert_eq!(
+            crate::fix::known(&e).unwrap(),
+            "api.groq.com sent back a response Sketchnote can't read. Retry, or check its status page."
+        );
     }
 
     #[test]

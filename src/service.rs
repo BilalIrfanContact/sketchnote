@@ -6,7 +6,9 @@
 //!     Cancel()       -> stops the mic and deletes the bundle dir
 //!     MicSilent()    -> true if the mic has recorded only near-silence for 3 s
 //!     MicLevel()     -> how loud the mic was over the last 0.1 s, 0 to 1
-//!     signal BundleReady(path) when a bundle is finished
+//!     signal BundleReady(path, warning) when a bundle is finished; `warning` is one
+//!            sentence for the user if it was built another way than set up (the local
+//!            model transcribed it because the API failed), else empty
 //!     signal BundleFailed(path, reason) when building it failed; `reason` is one
 //!            sentence for the user, the full error is in the bundle's error.txt
 //!
@@ -152,22 +154,19 @@ fn build_all(conn: Connection, queue: mpsc::Receiver<PathBuf>, in_use: InUse) {
     for dir in queue {
         let path = dir.display().to_string();
         let error_file = dir.join("error.txt");
-        let failure = match bundle::build(&dir) {
-            Ok(()) => {
-                let _ = std::fs::remove_file(&error_file);
-                None
-            }
-            Err(e) => {
-                eprintln!("building {path}: {e:#}");
-                let _ = std::fs::write(&error_file, format!("{e:#}\n"));
-                Some(fix::explain(&e, &error_file.display().to_string()))
-            }
-        };
+        let built = bundle::build(&dir).map_err(|e| {
+            eprintln!("building {path}: {e:#}");
+            let _ = std::fs::write(&error_file, format!("{e:#}\n"));
+            fix::explain(&e, &error_file.display().to_string())
+        });
+        if built.is_ok() {
+            let _ = std::fs::remove_file(&error_file);
+        }
         // Released before the signal, so a Retry it prompts isn't taken for a duplicate.
         in_use.lock().unwrap().remove(&dir);
-        match failure {
-            None => emit(&conn, "BundleReady", &(path,)),
-            Some(reason) => emit(&conn, "BundleFailed", &(path, reason)),
+        match built {
+            Ok(warning) => emit(&conn, "BundleReady", &(path, warning.unwrap_or_default())),
+            Err(reason) => emit(&conn, "BundleFailed", &(path, reason)),
         }
     }
 }
