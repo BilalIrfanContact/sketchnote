@@ -38,8 +38,9 @@ pub fn save_finished(dir: &Path, finished: &Finished) -> Result<()> {
 }
 
 /// Writes the full bundle into `dir` from its `finish.json` and recordings. Safe to run
-/// again after a failure: steps that already finished are redone or reused.
-pub fn build(dir: &Path) -> Result<()> {
+/// again after a failure: steps that already finished are redone or reused. Returns a
+/// warning for the user if it got there another way, e.g. with the local transcriber.
+pub fn build(dir: &Path) -> Result<Option<String>> {
     let finished: Finished = serde_json::from_slice(&fs::read(dir.join("finish.json"))?)?;
     let (capture, audio_t0) = (&finished.capture, finished.mic_t0);
     let t0 = capture.t0;
@@ -56,10 +57,9 @@ pub fn build(dir: &Path) -> Result<()> {
     }
     let video_size = media::probe_size(&video)?;
 
-    let words: Vec<Word> = crate::transcribe(&dir.join("audio.wav"))?
-        .into_iter()
-        .map(|w| Word { start: w.start + audio_offset, end: w.end + audio_offset, ..w })
-        .collect();
+    let (words, warning) = crate::transcribe(&dir.join("audio.wav"))?;
+    let words: Vec<Word> =
+        words.into_iter().map(|w| Word { start: w.start + audio_offset, end: w.end + audio_offset, ..w }).collect();
     let notes = notes::make_notes(&capture.events, &words, duration);
 
     fs::create_dir_all(dir.join("frames"))?;
@@ -85,7 +85,7 @@ pub fn build(dir: &Path) -> Result<()> {
         "audio_offset": audio_offset, "events": capture.events, "words": words, "marks": notes.marks,
     });
     fs::write(dir.join("sketchnote.json"), serde_json::to_string_pretty(&data)?)?;
-    Ok(())
+    Ok(warning)
 }
 
 /// PNGs without an alpha channel: smaller, and every pixel is opaque anyway.
