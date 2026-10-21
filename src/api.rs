@@ -73,7 +73,7 @@ pub fn words(wav: &Path, api: &Api) -> Result<Vec<Word>> {
             anyhow::anyhow!("{host} returned {status}: {shown}").context(Fix(explain(status, &shown, &host, api)))
         );
     }
-    let transcript: Transcript = serde_json::from_str(&text).with_context(|| format!("{host} returned: {shown}"))?;
+    let transcript = parse(&text, key.as_deref(), &host)?;
     let words = match transcript.words {
         Some(words) if !words.is_empty() || transcript.text.trim().is_empty() => words,
         _ => Err(Fix(no_word_timings(&host, api)))?,
@@ -83,6 +83,18 @@ pub fn words(wav: &Path, api: &Api) -> Result<Vec<Word>> {
     // API timings run words together over pauses; the local voice detector finds them again.
     let speech = transcribe::speech(wav)?;
     Ok(transcribe::drop_sound_tags(transcribe::fit_to_speech(words.collect(), &speech)))
+}
+
+/// The transcript in a 200 response. A parse error is replaced by a redacted description:
+/// serde's own can quote the response.
+fn parse(text: &str, key: Option<&str>, host: &str) -> Result<Transcript> {
+    serde_json::from_str(text).map_err(|e| {
+        anyhow::anyhow!(
+            "{host} sent a response Sketchnote can't read ({}): {}",
+            redact(&e.to_string(), key),
+            redact(text, key)
+        )
+    })
 }
 
 fn no_word_timings(host: &str, api: &Api) -> String {
@@ -199,6 +211,13 @@ mod tests {
     fn the_key_never_reaches_logs() {
         assert_eq!(redact("bad key gsk_secret given", Some("gsk_secret")), "bad key [API key] given");
         assert_eq!(redact(&"x".repeat(1200), None).chars().count(), 1001);
+    }
+
+    #[test]
+    fn a_malformed_response_never_quotes_the_key() {
+        let e = parse(r#"{"words":"gsk_secret"}"#, Some("gsk_secret"), "api.groq.com").err().unwrap();
+        assert!(!format!("{e:#}").contains("gsk_secret"));
+        assert!(format!("{e:#}").contains("[API key]"));
     }
 
     #[test]
