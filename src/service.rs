@@ -152,19 +152,23 @@ fn build_all(conn: Connection, queue: mpsc::Receiver<PathBuf>, in_use: InUse) {
     for dir in queue {
         let path = dir.display().to_string();
         let error_file = dir.join("error.txt");
-        match bundle::build(&dir) {
+        let failure = match bundle::build(&dir) {
             Ok(()) => {
                 let _ = std::fs::remove_file(&error_file);
-                emit(&conn, "BundleReady", &(path,));
+                None
             }
             Err(e) => {
                 eprintln!("building {path}: {e:#}");
                 let _ = std::fs::write(&error_file, format!("{e:#}\n"));
-                let reason = fix::explain(&e, &error_file.display().to_string());
-                emit(&conn, "BundleFailed", &(path, reason));
+                Some(fix::explain(&e, &error_file.display().to_string()))
             }
-        }
+        };
+        // Released before the signal, so a Retry it prompts isn't taken for a duplicate.
         in_use.lock().unwrap().remove(&dir);
+        match failure {
+            None => emit(&conn, "BundleReady", &(path,)),
+            Some(reason) => emit(&conn, "BundleFailed", &(path, reason)),
+        }
     }
 }
 
