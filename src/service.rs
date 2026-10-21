@@ -3,6 +3,7 @@
 //!     Start()        -> new bundle dir; starts recording the microphone into it
 //!     Finish(json)   -> bundle dir; stops the mic and queues the bundle to be built
 //!     Cancel()       -> stops the mic and deletes the bundle dir
+//!     MicSilent()    -> true if the mic has recorded only near-silence for 3 s
 //!     signal BundleReady(path) when a bundle is finished
 //!     signal BundleFailed(path) when building it failed (also a desktop notification)
 //!
@@ -77,6 +78,11 @@ impl Service {
 
     fn cancel(&self) {
         self.rec.lock().unwrap().cancel();
+    }
+
+    fn mic_silent(&self) -> bool {
+        let dir = self.rec.lock().unwrap().dir.clone();
+        dir.is_some_and(|d| Mic::is_silent(&d.join("audio.wav")).unwrap_or(false))
     }
 }
 

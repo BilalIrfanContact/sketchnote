@@ -20,6 +20,19 @@ pub fn be_nice() {
     unsafe { libc::setpriority(libc::PRIO_PROCESS, libc::gettid() as libc::id_t, 10) };
 }
 
+/// Seconds of recent audio checked for silence.
+const MIC_CHECK_SECS: usize = 3;
+/// Byte size of the WAV header pw-record writes before the samples.
+const WAV_HEADER: u64 = 44;
+/// Peak below this (about −60 dBFS) is a dead mic: a working one in a quiet room peaks
+/// far higher just from background noise (around −22 dBFS on mine).
+const SILENT_PEAK: i32 = 33;
+
+/// No sample in `samples` is louder than `SILENT_PEAK`.
+fn silent(samples: &[i16]) -> bool {
+    samples.iter().all(|&s| (s as i32).abs() < SILENT_PEAK)
+}
+
 /// Records the default (or `SKETCHNOTE_MIC_TARGET`) microphone to a 16 kHz mono WAV.
 pub struct Mic(Child);
 
@@ -31,6 +44,22 @@ impl Mic {
             cmd.args(["--target", &target]); // e.g. a test source
         }
         Ok(Mic(cmd.arg(wav).spawn().context("starting pw-record")?))
+    }
+
+    /// True if the last `MIC_CHECK_SECS` of the recording so far are near digital silence
+    /// (muted mic, wrong or disconnected device). False until that much is recorded.
+    pub fn is_silent(wav: &Path) -> Result<bool> {
+        use std::io::{Read, Seek, SeekFrom};
+        let want = (MIC_CHECK_SECS * 16000 * 2) as u64; // s16 mono at 16 kHz
+        let mut f = std::fs::File::open(wav)?;
+        let len = f.metadata()?.len();
+        if len < WAV_HEADER + want {
+            return Ok(false);
+        }
+        f.seek(SeekFrom::Start(len - want - (len - WAV_HEADER) % 2))?;
+        let mut buf = vec![0; want as usize];
+        f.read_exact(&mut buf)?;
+        Ok(silent(&buf.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect::<Vec<_>>()))
     }
 
     /// SIGINT lets pw-record finish the WAV header; kill it if it hangs.
@@ -108,4 +137,17 @@ pub fn grab_frame(video: &Path, t: f64) -> Result<RgbaImage> {
 
 pub fn notify(title: &str, body: &str) {
     let _ = Command::new("notify-send").args(["--app-name=Sketchnote", title, body]).status();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_near_digital_silence_counts_as_silent() {
+        assert!(silent(&[0, 1, -2, 32, -32]));
+        // A quiet room through a working mic is far louder than the threshold.
+        assert!(!silent(&[0, 0, 33, 0]));
+        assert!(!silent(&[0, -2600, 0]));
+    }
 }
