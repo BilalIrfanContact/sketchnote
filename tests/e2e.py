@@ -9,7 +9,7 @@ input through Mutter's RemoteDesktop API:
 
   capture 1: Alt+Shift+S, two strokes, two clicks, a Space-click pin, a stroke that is
              undone with Ctrl+Z, then Alt+Shift+S to finish.
-  capture 2: Alt+Shift+S, pick "Area" in the pill, drag an area, one stroke, click Finish.
+  capture 2: Alt+Shift+S, one stroke, click Finish in the pill.
   capture 3: Alt+Shift+S, Esc before the recording has started, Alt+Shift+S again at
              once, one stroke, Alt+Shift+S. The cancel must not clobber the new capture.
 
@@ -44,7 +44,6 @@ bus = Gio.bus_get_sync(Gio.BusType.SESSION)
 KEY = {'shift': 0xffe1, 'alt': 0xffe9, 'ctrl': 0xffe3, 's': 0x73, 'z': 0x7a, 'esc': 0xff1b,
        'space': 0x20, 'v': 0x76, 'c': 0x63}
 BTN_LEFT = 0x110
-AREA_BUTTON = (928, 57)
 
 
 def call(dest, path, iface, method, args=None, sig=None):
@@ -225,15 +224,9 @@ def main():
         print('capture 1 finished')
         time.sleep(3)
 
-        # --- capture 2: picker Area, drag area, draw, click Finish -----------------
+        # --- capture 2: draw, click Finish ------------------------------------------
         inp.combo('alt', 'shift', 's')
-        time.sleep(0.4)
-        # The picker is only up for 3 s and PipeWire screenshots can lag, so click the
-        # "Area" position measured on this 1920x1080 virtual monitor.
-        inp.click(*AREA_BUTTON)
-        time.sleep(1)
-        inp.drag(line(500, 250, 1300, 750, 10), space=False)  # select the area
-        time.sleep(1.5)
+        time.sleep(2.5)
         inp.drag(ellipse(900, 500, 120, 50))
         time.sleep(2.5)
         inp.screenshot('/tmp/sketchnote-e2e/pill-actions.png')
@@ -267,7 +260,7 @@ def main():
             ['stroke', 'stroke', 'click', 'click', 'pin', 'stroke'], 'capture 1 marks'
         assert d1['words'], 'capture 1 has speech'
         d2 = check_bundle(second)
-        assert d2['mode'] == 'area' and d2['area'] == [500, 250, 800, 500], d2['area']
+        assert d2['area'] == [0, 0, 1920, 1080], d2['area']
         assert [m['type'] for m in d2['marks']] == ['stroke'], 'capture 2 marks'
         d3 = check_bundle(third)
         assert [m['type'] for m in d3['marks']] == ['stroke'], 'capture 3 marks'

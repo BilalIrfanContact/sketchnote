@@ -16,7 +16,7 @@ pub struct Capture {
     pub video_t0: f64,
     /// Raw screencast file written by GNOME Shell.
     pub video: String,
-    pub mode: String,
+    /// Recorded region in stage coordinates: the whole stage, all monitors.
     pub area: Rect,
     /// Focused window when the capture started.
     pub window: Option<Window>,

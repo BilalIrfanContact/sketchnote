@@ -35,7 +35,6 @@ const PASTE_LATEST_KEY = '<Alt><Shift>v';
 const PASTE_SETTLE_MS = 400;   // time an app gets to read the clipboard before it changes
 const TEXT_MIME = 'text/plain;charset=utf-8';
 const CAPTURES = GLib.build_filenamev([GLib.get_user_data_dir(), 'sketchnote', 'captures']);
-const PICKER_MS = 3000;        // mode picker shows this long, then Undo/Cancel/Finish
 const FADE_HOLD = 0.5;         // seconds a finished stroke stays fully visible
 const FADE_TIME = 1.0;         // ...then fades out over this long
 const PIN_MAX_MOVE = 5;        // a Space+press that moves less than this is a pin
@@ -201,11 +200,11 @@ class Ink {
     }
 }
 
-// The top-centre pill. During a capture: a state dot, "Starting…" or the timer, then the
-// picker (Area / Window / Screen) or Undo / Cancel / Finish. After one: a status line
-// (Saving… / Transcribing… / Ready) with no buttons.
+// The top-centre pill. During a capture: a state dot, "Starting…" or the timer, then
+// Undo / Cancel / Finish. After one: a status line (Saving… / Transcribing… / Ready)
+// with no buttons.
 class Pill {
-    constructor({onMode, onUndo, onCancel, onFinish} = {}) {
+    constructor({onUndo, onCancel, onFinish} = {}) {
         this.actor = new St.BoxLayout({style_class: 'sketchnote-pill', reactive: true});
         this._dot = new St.Widget({style_class: 'sketchnote-dot', y_align: Clutter.ActorAlign.CENTER});
         this.actor.add_child(this._dot);
@@ -215,11 +214,6 @@ class Pill {
         this._sep = new St.Widget({style_class: 'sketchnote-sep'});
         this.actor.add_child(this._sep);
 
-        this._modes = {};
-        for (const [mode, label] of [['area', 'Area'], ['window', 'Window'], ['screen', 'Screen']]) {
-            const b = this._button(label, () => onMode(mode));
-            this._modes[mode] = b;
-        }
         this.undo = this._button('Undo', onUndo);
         this._cancel = this._button('Cancel', onCancel);
         this._finish = this._button('Finish', onFinish, 'sketchnote-finish');
@@ -245,25 +239,6 @@ class Pill {
             m.y + Main.panel.height + 8);
     }
 
-    showPicker(selected) {
-        for (const [mode, b] of Object.entries(this._modes)) {
-            b.visible = true;
-            if (mode === selected)
-                b.add_style_class_name('selected');
-            else
-                b.remove_style_class_name('selected');
-        }
-        for (const b of [this.undo, this._cancel, this._finish])
-            b.visible = false;
-    }
-
-    showActions() {
-        for (const b of Object.values(this._modes))
-            b.visible = false;
-        for (const b of [this.undo, this._cancel, this._finish])
-            b.visible = true;
-    }
-
     // One of DOT_STATES colours the dot; `text` replaces the timer (null keeps it).
     setState(state, text = null) {
         DOT_STATES.forEach(st => this._dot.remove_style_class_name(st));
@@ -275,7 +250,7 @@ class Pill {
     // Status-only pill: no separator, no buttons.
     showStatus(state, text) {
         this._sep.visible = false;
-        for (const b of [...Object.values(this._modes), this.undo, this._cancel, this._finish])
+        for (const b of [this.undo, this._cancel, this._finish])
             b.visible = false;
         this.setState(state, text);
     }
@@ -362,12 +337,10 @@ export default class Sketchnote extends Extension {
     }
 
     _toggle() {
-        if (this._selecting)
-            this._cancel();
-        else if (this._session)
+        if (this._session)
             this._finish();
         else
-            this._start('screen', null, true);
+            this._start();
     }
 
     // --- after Finish: Saving… -> Transcribing… -> Ready / Failed ----------------
@@ -510,12 +483,13 @@ export default class Sketchnote extends Extension {
 
     // --- capture lifecycle --------------------------------------------------
 
-    _start(mode, rect, withPicker) {
+    // Always records the whole screen (every monitor); the contact sheet crops to the marks.
+    _start() {
         const focus = windowInfo(global.display.focus_window);
         this._hideStatus();
-        this._showUi(withPicker ? mode : null);
-        const s = {t0: now(), mode, focus, events: [], video: null, videoT0: 0};
-        s.area = rect ?? [0, 0, global.stage.width, global.stage.height];
+        this._showUi();
+        const s = {t0: now(), focus, events: [], video: null, videoT0: 0};
+        s.area = [0, 0, global.stage.width, global.stage.height];
         this._session = s;
         this._lastInk = [];
         s.ready = this._record(s);
@@ -528,7 +502,7 @@ export default class Sketchnote extends Extension {
             await this._stopping;
             const [dir] = await service('Start', null, '(s)');
             s.dir = dir;
-            const [ok, used] = await this._screencast(s, GLib.build_filenamev([dir, 'screencast']));
+            const [ok, used] = await this._screencast(GLib.build_filenamev([dir, 'screencast']));
             if (!ok)
                 throw new Error('GNOME Shell refused to start the screencast');
             s.video = used;
@@ -545,15 +519,12 @@ export default class Sketchnote extends Extension {
 
     // GNOME's recorder service can crash while setting up a pipeline; it then blocklists
     // that pipeline, so (like GNOME's own screenshot UI) retry a couple of times.
-    async _screencast(s, template) {
+    async _screencast(template) {
         const opts = {'draw-cursor': GLib.Variant.new_boolean(true)};
         for (let attempt = 0; ; attempt++) {
             try {
-                return s.mode === 'screen'
-                    ? await screencast('Screencast',
-                        new GLib.Variant('(sa{sv})', [template, opts]), '(bs)')
-                    : await screencast('ScreencastArea',
-                        new GLib.Variant('(iiiisa{sv})', [...s.area, template, opts]), '(bs)');
+                return await screencast('Screencast',
+                    new GLib.Variant('(sa{sv})', [template, opts]), '(bs)');
             } catch (e) {
                 if (attempt >= 2 || !e.matches?.(Gio.DBusError, Gio.DBusError.NO_REPLY))
                     throw e;
@@ -591,7 +562,7 @@ export default class Sketchnote extends Extension {
         }
         const capture = {
             t0: s.t0, end, video_t0: s.videoT0, video: s.video,
-            mode: s.mode, area: s.area, window: s.focus, events: s.events,
+            area: s.area, window: s.focus, events: s.events,
         };
         try {
             await service('Finish', new GLib.Variant('(s)', [JSON.stringify(capture)]), '(s)');
@@ -603,7 +574,6 @@ export default class Sketchnote extends Extension {
     }
 
     _cancel() {
-        this._endSelection();
         const s = this._session;
         this._session = null;
         this._hideUi();
@@ -614,26 +584,9 @@ export default class Sketchnote extends Extension {
         return this._stopping;
     }
 
-    // Picker click: restart the capture in the chosen mode (the timer starts over).
-    async _pickMode(mode) {
-        const s = this._session;
-        if (mode === s.mode) {
-            this._ui.pill.showActions();
-            return;
-        }
-        if (mode === 'window') {
-            const w = s.focus;
-            await this._cancel();
-            this._start(w ? 'window' : 'screen', w?.rect ?? null, false);
-        } else {
-            await this._cancel();
-            this._selectArea(rect => this._start('area', rect, false));
-        }
-    }
-
     // --- UI -------------------------------------------------------------------
 
-    _showUi(pickerMode) {
+    _showUi() {
         const ui = {glows: []};
         ui.ink = new Ink();
         Main.uiGroup.add_child(ui.ink.actor);
@@ -644,21 +597,10 @@ export default class Sketchnote extends Extension {
         Main.uiGroup.add_child(ui.catcher);
 
         ui.pill = new Pill({
-            onMode: mode => this._pickMode(mode),
             onUndo: () => this._undo(),
             onCancel: () => this._cancel(),
             onFinish: () => this._finish(),
         });
-        if (pickerMode) {
-            ui.pill.showPicker(pickerMode);
-            ui.pickerTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, PICKER_MS, () => {
-                ui.pickerTimeout = 0;
-                ui.pill.showActions();
-                return GLib.SOURCE_REMOVE;
-            });
-        } else {
-            ui.pill.showActions();
-        }
         ui.pill.undo.reactive = false;
         ui.pill.setState('starting', 'Starting…');
         ui.clock = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
@@ -705,7 +647,7 @@ export default class Sketchnote extends Extension {
         this._stroke = null;
         this._spaceHeld = false;
         this._releaseGrab();
-        for (const id of [ui.clock, ui.poll, ui.pickerTimeout])
+        for (const id of [ui.clock, ui.poll])
             if (id)
                 GLib.source_remove(id);
         ui.keys.forEach(k => this._ungrabKey(k));
@@ -815,60 +757,5 @@ export default class Sketchnote extends Extension {
 
     _elapsed() {
         return Math.round((now() - this._session.t0) / 1000) / 1000;
-    }
-
-    // --- area selection --------------------------------------------------------
-
-    _selectArea(done) {
-        const overlay = new St.Widget({style_class: 'sketchnote-select', reactive: true,
-            x: 0, y: 0, width: global.stage.width, height: global.stage.height});
-        const box = new St.Widget({style_class: 'sketchnote-select-rect', visible: false});
-        overlay.add_child(box);
-        Main.layoutManager.addTopChrome(overlay);
-        const esc = this._grabKey('Escape', () => this._endSelection());
-        let start = null;
-        let grab = null;
-        const rect = (x, y) => [Math.min(x, start[0]), Math.min(y, start[1]),
-            Math.abs(x - start[0]), Math.abs(y - start[1])];
-        overlay.connect('event', (_a, event) => {
-            const [x, y] = event.get_coords();
-            switch (event.type()) {
-            case Clutter.EventType.BUTTON_PRESS:
-                start = [x, y];
-                grab = global.stage.grab(overlay);
-                return Clutter.EVENT_STOP;
-            case Clutter.EventType.MOTION:
-                if (start) {
-                    const [rx, ry, rw, rh] = rect(x, y);
-                    box.set_position(rx, ry);
-                    box.set_size(rw, rh);
-                    box.visible = true;
-                }
-                return Clutter.EVENT_STOP;
-            case Clutter.EventType.BUTTON_RELEASE: {
-                if (!start)
-                    return Clutter.EVENT_STOP;
-                const r = rect(x, y).map(Math.round);
-                grab?.dismiss();
-                this._endSelection();
-                // Screencasts need even sizes; ignore accidental tiny drags.
-                if (r[2] >= 16 && r[3] >= 16)
-                    done([r[0], r[1], r[2] & ~1, r[3] & ~1]);
-                return Clutter.EVENT_STOP;
-            }
-            }
-            return Clutter.EVENT_PROPAGATE;
-        });
-        this._selecting = {overlay, esc};
-    }
-
-    _endSelection() {
-        const sel = this._selecting;
-        if (!sel)
-            return;
-        this._selecting = null;
-        this._ungrabKey(sel.esc);
-        Main.layoutManager.removeChrome(sel.overlay);
-        sel.overlay.destroy();
     }
 }

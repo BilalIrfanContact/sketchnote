@@ -39,7 +39,7 @@ Starting a capture starts the microphone at once and the screen recorder within 
 
 - **Starting…** with a grey dot: the screen recorder isn't running yet.
 - **Recording**: a red dot and the timer, a red glow around the screen, and a stop icon in the top bar.
-- The pill also shows **Area / Window / Screen** for 3 seconds. Picking **Window** or **Area** restarts the capture on that target, and Area lets you drag a rectangle. The pill then switches to **Undo / Cancel / Finish**.
+- The pill has **Undo / Cancel / Finish**.
 
 After Finish, the pill stays up with an amber dot: **Saving…**, then **Transcribing…** (about 10 s for 20 s of speech on CPU). It turns green with **Ready · Ctrl+V to paste** when the notes are on the clipboard, then hides after a few seconds. If building fails, it says so and a notification gives the reason. Press Ctrl+V in your agent's input box: the extension pastes the notes, swaps the clipboard to the contact sheet and pastes again, so you get the text and the image from one key press. Each is an ordinary paste, so this works in any app that accepts pasted text and images. Once you copy something else, Ctrl+V is normal again; Alt+Shift+V pastes the latest capture whenever you want it back.
 
@@ -69,7 +69,7 @@ Each capture is a folder `~/.local/share/sketchnote/captures/<timestamp>.bundle/
 
 ## How it's built
 
-- **`extension/sketchnote@local/extension.js`** (GNOME Shell extension). It handles the hotkey, glow, pill, live ink, pins, click logging, undo, cancel and area picking. It records the screen through GNOME Shell's own Screencast service. Only the Shell may call that service, so there's no portal prompt and the recording code lives in the extension.
+- **`extension/sketchnote@local/extension.js`** (GNOME Shell extension). It handles the hotkey, glow, pill, live ink, pins, click logging, undo and cancel. It records the screen through GNOME Shell's own Screencast service. Only the Shell may call that service, so there's no portal prompt and the recording code lives in the extension.
 - **The `sketchnote` binary** (Rust, `src/`). `sketchnote service` is the D-Bus service `org.sketchnote.Service`, started on demand:
   - `service.rs` records the mic with `pw-record` and builds the bundle on Finish.
   - `bundle.rs` converts the video with ffmpeg and writes the bundle.
@@ -85,7 +85,7 @@ These are the simplest options, picked deliberately. Change them freely.
 
 - **Hotkeys.** Scrawl's ⌥⇧S / ⌥⇧V become Alt+Shift+S / Alt+Shift+V. Hotkeys are constants at the top of `extension.js`. There's no settings UI.
 - **Pasting text and image together.** A clipboard holds one thing that apps reliably paste, so the extension pastes twice: notes first, then the contact sheet, 0.4 s apart. Alt+Shift+V waits until you release Alt and Shift, otherwise the app would see Ctrl+Alt+Shift+V.
-- **Mode picker.** It shows for 3 s. Picking Window uses the window that was focused when you pressed the hotkey. Picking Window or Area restarts the capture, so the timer resets. There's no iPhone mode.
+- **Whole screen only.** A capture always records the whole screen, all monitors as one image, so you can switch apps freely. There's no Area or Window mode; the contact sheet already crops each keyframe around your marks. There's no iPhone mode.
 - **Marks.** Every stroke, click and pin is its own mark; nothing is merged. Each mark gets the words spoken from its start until the next mark. Words spoken before the first mark go to #1. With no marks, the whole capture is one note keyed on the last frame.
 - **Note tags.** Clicks are tagged `[clicked]` and pins `[pin]`.
 - **Pins.** A red circle showing its mark number, fading like strokes.
@@ -101,7 +101,7 @@ These are the simplest options, picked deliberately. Change them freely.
 
 - **Space is reserved while capturing.** Space is grabbed globally during a capture, so you can't type spaces into apps until you finish or cancel. Scrawl uses Shift; Space was chosen here so Shift keeps working in apps.
 - **The recording shows Sketchnote's own UI.** GNOME's screencast records everything on screen, so `recording.mp4` and the keyframes include the pill, the glow and the live strokes. The strokes in the keyframes are redrawn on top in the same spot.
-- **Pill placement.** The pill sits on the primary monitor. Screen mode records all monitors as one image.
+- **Pill placement.** The pill sits on the primary monitor.
 - **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`; the pill says **Starting…** until it's running. The mic starts within about 0.1 s, and both offsets are stored and applied. I've seen it take 14 s once. If you cancel or finish and immediately start again, the new capture waits for the previous recording to stop before it starts recording.
 - **Missed clicks.** Clicks are detected by polling every 10 ms, so a press shorter than that could be missed.
 - **Heavy work runs niced.** Building a bundle runs at nice 10, and transcription uses half the CPU cores, so the desktop stays responsive.
@@ -116,7 +116,7 @@ tests/e2e.py speech.wav                # full run in a throwaway headless GNOME 
 
 CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, clippy with warnings as errors and `cargo test` on every PR, and syntax-checks the extension and scripts. `e2e.py` needs GNOME Shell, so run it locally before merging extension changes.
 
-`e2e.py` doesn't touch your session. It starts `gnome-shell --headless` on a private bus with a private dconf, enables the extension there, and plays `speech.wav` (about 30 s of you talking, any WAV) into a virtual mic. It then drives real keyboard and pointer input through Mutter's RemoteDesktop API: strokes, clicks, a pin, undo, the Area picker and Finish. Finally it checks both bundles. Results are written to `~/.local/share/sketchnote/captures/`.
+`e2e.py` doesn't touch your session. It starts `gnome-shell --headless` on a private bus with a private dconf, enables the extension there, and plays `speech.wav` (about 30 s of you talking, any WAV) into a virtual mic. It then drives real keyboard and pointer input through Mutter's RemoteDesktop API: strokes, clicks, a pin, undo, cancel-and-restart and Finish. Finally it checks the bundles and the paste. Results are written to `~/.local/share/sketchnote/captures/`.
 
 ## Uninstall
 
