@@ -331,7 +331,7 @@ export default class Sketchnote extends Extension {
         });
         this._readyId = Gio.DBus.session.signal_subscribe(null, 'org.sketchnote.Service',
             'BundleReady', '/org/sketchnote/Service', null, Gio.DBusSignalFlags.NONE,
-            (_c, _sender, _path, _iface, _signal, params) => this._onBundleReady(params.deepUnpack()[0]));
+            (_c, _sender, _path, _iface, _signal, params) => this._onBundleReady(...params.deepUnpack()));
         this._failedId = Gio.DBus.session.signal_subscribe(null, 'org.sketchnote.Service',
             'BundleFailed', '/org/sketchnote/Service', null, Gio.DBusSignalFlags.NONE,
             (_c, _sender, _path, _iface, _signal, params) => this._onBundleFailed(...params.deepUnpack()));
@@ -427,11 +427,17 @@ export default class Sketchnote extends Extension {
         this._showStatus(state, text, ms);
     }
 
-    _onBundleReady(dir) {
+    // `warning` is the service's sentence if the notes were made another way than set
+    // up (the local model stood in for a failed API); Retry tries the usual way again.
+    _onBundleReady(dir, warning = '') {
         this._arm(dir);
         const s = this._owner;
-        if (s?.dir === dir)
-            this._ownStatus(s, 'ready', 'Ready · Ctrl+V to paste', STATUS_MS);
+        if (s?.dir === dir) {
+            this._ownStatus(s, 'ready', warning ? 'Ready (local model) · Ctrl+V to paste'
+                : 'Ready · Ctrl+V to paste', STATUS_MS);
+        }
+        if (warning)
+            notifyProblem('Transcribed with the local model', warning, [['Retry', () => this._retry(dir)]]);
     }
 
     // `reason` is the service's sentence for the user; the recordings are kept, so the
