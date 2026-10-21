@@ -56,14 +56,17 @@ pub fn words(wav: &Path, api: &Api) -> Result<Vec<Word>> {
     if let Some(key) = &key {
         request = request.header("Authorization", &format!("Bearer {key}"));
     }
-    let mut response = request.send(&body[..]).map_err(|e| {
+    let unreachable = |e: ureq::Error| {
         anyhow::Error::new(e).context(Fix(format!(
             "Couldn't reach {host}. Check your internet connection and the url in {}, then retry.",
             crate::config::path().display()
         )))
-    })?;
+    };
+    let mut response = request.send(&body[..]).map_err(unreachable)?;
     let status = response.status().as_u16();
-    let text = response.body_mut().read_to_string().context("reading the transcription response")?;
+    let text = response.body_mut().read_to_string().map_err(unreachable)?;
+    // Whatever the server sends back may end up in error.txt and the journal.
+    let text = redact(&text, key.as_deref());
     if status != 200 {
         return Err(
             anyhow::anyhow!("{host} returned {status}: {text}").context(Fix(explain(status, &text, &host, api)))
@@ -72,15 +75,31 @@ pub fn words(wav: &Path, api: &Api) -> Result<Vec<Word>> {
     let transcript: Transcript = serde_json::from_str(&text).with_context(|| format!("{host} returned: {text}"))?;
     let words = match transcript.words {
         Some(words) if !words.is_empty() || transcript.text.trim().is_empty() => words,
-        _ => Err(Fix(format!(
-            "The model {} on {host} doesn't give word timings, which Sketchnote needs. Use a Whisper model such as whisper-large-v3-turbo, then retry.",
-            api.model
-        )))?,
+        _ => Err(Fix(no_word_timings(&host, api)))?,
     };
     // Spaced like whisper.cpp's words, which the notes join as they are.
     Ok(transcribe::drop_sound_tags(
         words.into_iter().map(|w| Word { word: format!(" {}", w.word.trim()), start: w.start, end: w.end }).collect(),
     ))
+}
+
+fn no_word_timings(host: &str, api: &Api) -> String {
+    format!(
+        "The model {} on {host} doesn't give word timings, which Sketchnote needs. Use a Whisper model such as whisper-large-v3-turbo, then retry.",
+        api.model
+    )
+}
+
+/// `text` with the API key blanked out and cut to a readable length, for logs and errors.
+fn redact(text: &str, key: Option<&str>) -> String {
+    let text = match key {
+        Some(key) if !key.is_empty() => text.replace(key, "[API key]"),
+        _ => text.to_string(),
+    };
+    match text.char_indices().nth(1000) {
+        Some((cut, _)) => format!("{}…", &text[..cut]),
+        None => text,
+    }
 }
 
 /// What to tell the user about a failed request, from its status and error body.
@@ -105,7 +124,14 @@ fn explain(status: u16, body: &str, host: &str, api: &Api) -> String {
             format!("Your {host} account is out of credit or reached its spending limit. Top it up, then retry.")
         }
         429 => format!("{host} is limiting how often you can transcribe. Wait a minute, then retry."),
-        413 => format!("This recording is too big for {host}'s upload limit."),
+        413 => format!(
+            "This recording is too big for {host}'s upload limit. Set transcriber = \"local\" in {} (or use a provider with a bigger limit), then retry.",
+            crate::config::path().display()
+        ),
+        // Text-only models (OpenAI's GPT-4o transcribe) refuse the word-timestamp request.
+        400 if ["verbose_json", "timestamp_granularities", "response_format"].iter().any(|p| message.contains(p)) => {
+            no_word_timings(host, api)
+        }
         404 => format!(
             "{host} doesn't know the model \"{}\", or the url is wrong. Check [api] in {}, then retry.",
             api.model,
@@ -160,7 +186,17 @@ mod tests {
         assert!(say(400, r#"{"error":{"code":"blocked_api_access"}}"#).contains("out of credit"));
         assert!(say(429, r#"{"error":{"type":"rate_limit_error","code":"slow_down"}}"#).contains("Wait a minute"));
         assert!(say(500, "boom").contains("(500: boom)"));
+        let text_only =
+            r#"{"error":{"message":"response_format 'verbose_json' is not compatible with gpt-4o-transcribe"}}"#;
+        assert!(say(400, text_only).contains("doesn't give word timings"));
+        assert!(say(413, "").contains("transcriber = \"local\""));
         assert_eq!(host("http://localhost:8000/v1"), "localhost:8000");
+    }
+
+    #[test]
+    fn the_key_never_reaches_logs() {
+        assert_eq!(redact("bad key gsk_secret given", Some("gsk_secret")), "bad key [API key] given");
+        assert_eq!(redact(&"x".repeat(1200), None).chars().count(), 1001);
     }
 
     #[test]
