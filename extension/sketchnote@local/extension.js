@@ -42,7 +42,6 @@ const POLL_MS = 10;
 const GLOW_WIDTH = 28;         // px of red fade along each screen edge
 const STATUS_MS = 6000;        // a "Ready" or "Failed" status hides itself after this
 const DOT_STATES = ['starting', 'recording', 'busy', 'ready', 'failed'];
-const METER_WIDTH = 36;        // px; must match .sketchnote-meter in stylesheet.css
 const METER_MS = 100;
 
 const now = () => GLib.get_monotonic_time();   // µs, same clock as Python's time.monotonic
@@ -211,7 +210,9 @@ class Pill {
         // Mic level: a bar that follows your voice while recording.
         this._meter = new St.Widget({style_class: 'sketchnote-meter', y_align: Clutter.ActorAlign.CENTER,
             visible: false});
-        this._meterFill = new St.Widget({style_class: 'sketchnote-meter-fill', width: 0});
+        // Full track width, scaled down to the level (so HiDPI scaling just works).
+        this._meterFill = new St.Widget({style_class: 'sketchnote-meter-fill', scale_x: 0});
+        this._level = 0;
         this._meter.add_child(this._meterFill);
         this.actor.add_child(this._meter);
         this._micWarning = new St.Label({style_class: 'sketchnote-mic-warning', text: 'Mic is silent',
@@ -264,8 +265,8 @@ class Pill {
     // `level` 0..1; jumps up at once, falls back smoothly so speech doesn't flicker.
     setMicLevel(level) {
         this._meter.visible = true;
-        const shown = Math.max(level, this._meterFill.width / METER_WIDTH * 0.75);
-        this._meterFill.width = Math.round(shown * METER_WIDTH);
+        this._level = Math.max(level, this._level * 0.75);
+        this._meterFill.scale_x = this._level;
     }
 
     setMicSilent(silent) {
