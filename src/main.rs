@@ -3,9 +3,11 @@
 //!     sketchnote service           run the D-Bus service (normally started by D-Bus activation)
 //!     sketchnote latest            print the latest finished bundle's path
 //!     sketchnote transcribe WAV    print a 16 kHz mono WAV's words with timestamps, as JSON
+//!     sketchnote download-model    download the speech model set in config.toml, if missing
 
 mod bundle;
 mod capture;
+mod config;
 mod draw;
 mod fix;
 mod media;
@@ -38,6 +40,10 @@ fn latest() -> Option<PathBuf> {
     dirs.into_iter().rev().find(|d| d.join("summary.md").exists())
 }
 
+fn configured_model() -> Result<transcribe::Model> {
+    transcribe::Model::parse(&config::load()?.local.model)
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result: Result<()> = match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
@@ -46,11 +52,13 @@ fn main() -> ExitCode {
             println!("{}", latest().map(|p| p.display().to_string()).unwrap_or_default());
             Ok(())
         }
-        ["transcribe", wav] => transcribe::words(wav.as_ref())
+        ["transcribe", wav] => configured_model()
+            .and_then(|model| transcribe::words(wav.as_ref(), &model))
             .and_then(|w| Ok(serde_json::to_string_pretty(&w)?))
             .map(|json| println!("{json}")),
+        ["download-model"] => configured_model().and_then(|model| transcribe::download(&model)),
         _ => {
-            eprintln!("usage: sketchnote service | latest | transcribe WAV");
+            eprintln!("usage: sketchnote service | latest | transcribe WAV | download-model");
             return ExitCode::from(2);
         }
     };

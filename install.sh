@@ -12,15 +12,8 @@ echo "== Building sketchnote (needs cargo and cmake)"
 cargo build --release --quiet --manifest-path "$HERE/Cargo.toml"
 BIN="$HERE/target/release/sketchnote"
 
-echo "== Whisper models -> $MODELS (first run only)"
-mkdir -p "$MODELS"
-for model in ggerganov/whisper.cpp/ggml-small-q8_0.bin ggml-org/whisper-vad/ggml-silero-v5.1.2.bin; do
-    file="$MODELS/${model##*/}"
-    if [ ! -f "$file" ]; then
-        curl -fL --progress-bar -o "$file.part" "https://huggingface.co/${model%/*}/resolve/main/${model##*/}"
-        mv "$file.part" "$file"
-    fi
-done
+echo "== Speech model set in ~/.config/sketchnote/config.toml -> $MODELS (if missing)"
+"$BIN" download-model
 
 echo "== GNOME Shell extension -> $EXT_DIR"
 mkdir -p "$(dirname "$EXT_DIR")"
