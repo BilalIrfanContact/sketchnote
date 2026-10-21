@@ -35,13 +35,13 @@ pub fn build(dir: &Path, capture: &Capture, audio_t0: f64) -> Result<()> {
         .into_iter()
         .map(|w| Word { start: w.start + audio_offset, end: w.end + audio_offset, ..w })
         .collect();
-    let marks = notes::make_marks(&capture.events, &words, duration);
+    let notes = notes::make_notes(&capture.events, &words, duration);
 
     fs::create_dir_all(dir.join("frames"))?;
     fs::create_dir_all(dir.join("frames-full"))?;
     let map = Mapper::new(capture.area, video_size);
     let mut tiles = vec![];
-    for mark in &marks {
+    for mark in &notes.marks {
         let mut frame = media::grab_frame(&video, mark.frame_t - video_offset)?;
         draw_mark(&mut frame, mark, &map);
         let (x0, y0, x1, y1) = crop_box(mark, capture.area, &map, video_size);
@@ -53,11 +53,11 @@ pub fn build(dir: &Path, capture: &Capture, audio_t0: f64) -> Result<()> {
     }
     save_rgb(&contact_sheet(&tiles), &dir.join("contact-sheet.png"))?;
 
-    fs::write(dir.join("summary.md"), notes::summary(&marks))?;
+    fs::write(dir.join("summary.md"), notes::summary(&notes))?;
     let data = json!({
         "duration": duration, "area": capture.area,
         "target": notes::main_target(capture), "video_offset": video_offset,
-        "audio_offset": audio_offset, "events": capture.events, "words": words, "marks": marks,
+        "audio_offset": audio_offset, "events": capture.events, "words": words, "marks": notes.marks,
     });
     fs::write(dir.join("sketchnote.json"), serde_json::to_string_pretty(&data)?)?;
     Ok(())

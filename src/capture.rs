@@ -78,7 +78,7 @@ pub struct Word {
     pub end: f64,
 }
 
-/// One numbered note: an event plus the words spoken until the next one.
+/// One numbered note: an event plus the sentences spoken around it.
 #[derive(Debug, Clone, Serialize)]
 pub struct Mark {
     pub n: usize,
