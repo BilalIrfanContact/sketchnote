@@ -130,8 +130,9 @@ pub fn crop_box(
     }
     let (px0, py0) = map.px(x0, y0);
     let (px1, py1) = map.px(x1, y1);
-    let clamp = |v: f64, max: u32| (v.round().max(0.0) as u32).min(max);
-    (clamp(px0, w), clamp(py0, h), clamp(px1, w), clamp(py1, h))
+    // Round outward, so a mark edge between two pixels (fractional scaling) isn't shaved.
+    let clamp = |v: f64, max: u32| (v.max(0.0) as u32).min(max);
+    (clamp(px0.floor(), w), clamp(py0.floor(), h), clamp(px1.ceil(), w), clamp(py1.ceil(), h))
 }
 
 fn grow(a: f64, b: f64, size: f64) -> (f64, f64) {
@@ -329,6 +330,11 @@ mod tests {
         assert_eq!(crop_box(&mark(line(1300.0, 1860.0)), area, None, &map, (1920, 1080)).2, 1892);
         // One ending inside the glow: the crop ends right at the line (2 px past it).
         assert_eq!(crop_box(&mark(line(1300.0, 1905.0)), area, None, &map, (1920, 1080)).2, 1907);
+        // At 125% scaling a pin's edge lands between pixels (1516 + 13 -> 1911.25 px):
+        // the crop rounds out to keep that partly painted pixel.
+        let small = [0.0, 0.0, 1536.0, 864.0];
+        let pin = Event { kind: Kind::Pin, points: vec![], x: Some(1516.0), y: Some(400.0), ..line(0.0, 0.0) };
+        assert_eq!(crop_box(&mark(pin), small, None, &Mapper::new(small, (1920, 1080)), (1920, 1080)).2, 1912);
         // One running off the edge keeps the edge.
         assert_eq!(crop_box(&mark(line(1300.0, 1920.0)), area, None, &map, (1920, 1080)).2, 1920);
     }
