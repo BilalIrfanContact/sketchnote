@@ -42,7 +42,7 @@ Starting a capture starts the microphone at once and the screen recorder within 
 - **Mic is silent** in amber next to the timer: the mic has recorded only digital silence for the last 3 seconds (muted, or the wrong or a disconnected input). It clears as soon as sound comes in.
 - The pill has **Undo / Cancel / Finish**.
 
-After Finish, the pill stays up with an amber dot: **Saving…**, then **Transcribing…** (about 10 s for 20 s of speech on CPU). It turns green with **Ready · Ctrl+V to paste** when the notes are on the clipboard, then hides after a few seconds. If building fails, it says so and a notification gives the reason. Press Ctrl+V in your agent's input box: the extension pastes the notes, swaps the clipboard to the contact sheet and pastes again, so you get the text and the image from one key press. Each is an ordinary paste, so this works in any app that accepts pasted text and images. Once you copy something else, Ctrl+V is normal again; Alt+Shift+V pastes the latest capture whenever you want it back.
+After Finish, the pill stays up with an amber dot: **Saving…**, then **Transcribing…** (about 10 s for 20 s of speech on CPU). It turns green with **Ready · Ctrl+V to paste** when the notes are on the clipboard, then hides after a few seconds. If building fails, the pill says so and a notification gives the reason in plain words (say, the speech model is missing) with a **Retry** button. The recordings are kept, so Retry builds the same capture again once you've fixed the cause. The notification stays in the message tray until you dismiss it. Press Ctrl+V in your agent's input box: the extension pastes the notes, swaps the clipboard to the contact sheet and pastes again, so you get the text and the image from one key press. Each is an ordinary paste, so this works in any app that accepts pasted text and images. Once you copy something else, Ctrl+V is normal again; Alt+Shift+V pastes the latest capture whenever you want it back.
 
 CLI: `target/release/sketchnote latest | service | transcribe file.wav`.
 
@@ -59,6 +59,8 @@ Each capture is a folder `~/.local/share/sketchnote/captures/<timestamp>.bundle/
 | `contact-sheet.png` | Cropped keyframes in rows of two, in note order, with number badges |
 | `summary.md` | The handoff text, pasted by Ctrl+V or Alt+Shift+V |
 | `sketchnote.json` | Timings, strokes, clicks, pins, target window, word timestamps, marks |
+| `finish.json` | What the extension sent on Finish, so a failed build can be retried |
+| `error.txt` | Only after a failed build: the full error behind the notification |
 
 `summary.md` looks like this:
 
