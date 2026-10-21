@@ -19,6 +19,8 @@ pub const GAP: u32 = 16;
 const PAD: f64 = 160.0;
 /// Logical px; small marks still get readable context.
 const MIN_CROP: (f64, f64) = (640.0, 400.0);
+/// Logical px a drawn mark reaches past its points (the click ring: radius 14 + line).
+const MARK_REACH: f64 = 16.0;
 
 static FONT: &[u8] = include_bytes!("../assets/DejaVuSans-Bold.ttf");
 
@@ -70,7 +72,7 @@ pub fn draw_mark(img: &mut RgbaImage, mark: &Mark, map: &Mapper) {
 
 /// Box (x0, y0, x1, y1) in recording pixels around the mark's activity: padded,
 /// grown to a readable minimum, clamped to the mark's window and the recording. If the
-/// activity is all below `pill` (Sketchnote's own UI), the box starts below it too.
+/// activity, as drawn, is all below `pill` (Sketchnote's own UI), the box starts below it.
 pub fn crop_box(
     mark: &Mark,
     area: Rect,
@@ -91,7 +93,7 @@ pub fn crop_box(
     let (mut y0, mut y1) = grow(top - PAD, ys.fold(f64::MIN, f64::max) + PAD, MIN_CROP.1);
     if let Some([px, py, pw, ph]) = pill {
         let below = py + ph;
-        if top >= below && y0 < below && x0 < px + pw && px < x1 {
+        if top - MARK_REACH >= below && y0 < below && x0 < px + pw && px < x1 {
             y0 = below;
             y1 = y1.max(below + MIN_CROP.1);
         }
@@ -281,8 +283,10 @@ mod tests {
         let map = Mapper::new(area, (1920, 1080));
         // A pin under the pill: the crop would reach y = 0, now starts at the pill's bottom.
         assert_eq!(crop_box(&mark(at(150.0)), area, pill, &map, (1920, 1080)), (640, 76, 1280, 476));
-        // A pin beside the pill is kept as is: cropping the pill out would cut the mark.
+        // A pin beside or just under the pill is kept as is: cropping the pill out would
+        // cut the drawn mark.
         assert_eq!(crop_box(&mark(at(50.0)), area, pill, &map, (1920, 1080)).1, 0);
+        assert_eq!(crop_box(&mark(at(80.0)), area, pill, &map, (1920, 1080)).1, 0);
     }
 
     #[test]
