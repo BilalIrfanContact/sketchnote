@@ -19,8 +19,9 @@ pub const GAP: u32 = 16;
 const PAD: f64 = 160.0;
 /// Logical px; small marks still get readable context.
 const MIN_CROP: (f64, f64) = (640.0, 400.0);
-/// Logical px a drawn mark reaches past its points (the click ring: radius 14 + line).
-const MARK_REACH: f64 = 16.0;
+/// Logical px of the red glow along the screen edges while recording (`GLOW_WIDTH` in
+/// extension.js).
+const GLOW: f64 = 28.0;
 
 static FONT: &[u8] = include_bytes!("../assets/DejaVuSans-Bold.ttf");
 
@@ -70,9 +71,20 @@ pub fn draw_mark(img: &mut RgbaImage, mark: &Mark, map: &Mapper) {
     });
 }
 
+/// Logical px a drawn mark reaches past its points: half a stroke's line, a pin's radius,
+/// a click ring's radius plus its line (see `draw_mark`).
+fn reach(kind: &Kind) -> f64 {
+    match kind {
+        Kind::Stroke => 2.0,
+        Kind::Pin => 13.0,
+        _ => 16.0,
+    }
+}
+
 /// Box (x0, y0, x1, y1) in recording pixels around the mark's activity: padded,
-/// grown to a readable minimum, clamped to the mark's window and the recording. If the
-/// activity, as drawn, is all below `pill` (Sketchnote's own UI), the box starts below it.
+/// grown to a readable minimum, clamped to the mark's window and the recording. Sketchnote's
+/// own UI is kept out where that doesn't cut the drawn mark: the box starts below `pill`,
+/// and is trimmed off the red glow along the recording's edges up to the mark itself.
 pub fn crop_box(
     mark: &Mark,
     area: Rect,
@@ -88,17 +100,26 @@ pub fn crop_box(
     }
     let xs = pts.iter().map(|p| p[0]);
     let ys = pts.iter().map(|p| p[1]);
-    let top = ys.clone().fold(f64::MAX, f64::min);
-    let (x0, x1) = grow(xs.clone().fold(f64::MAX, f64::min) - PAD, xs.fold(f64::MIN, f64::max) + PAD, MIN_CROP.0);
-    let (mut y0, mut y1) = grow(top - PAD, ys.fold(f64::MIN, f64::max) + PAD, MIN_CROP.1);
+    let (left, right) = (xs.clone().fold(f64::MAX, f64::min), xs.fold(f64::MIN, f64::max));
+    let (top, bottom) = (ys.clone().fold(f64::MAX, f64::min), ys.fold(f64::MIN, f64::max));
+    let (x0, x1) = grow(left - PAD, right + PAD, MIN_CROP.0);
+    let (mut y0, mut y1) = grow(top - PAD, bottom + PAD, MIN_CROP.1);
     if let Some([px, py, pw, ph]) = pill {
         let below = py + ph;
-        if top - MARK_REACH >= below && y0 < below && x0 < px + pw && px < x1 {
+        if top - reach(&e.kind) >= below && y0 < below && x0 < px + pw && px < x1 {
             y0 = below;
             y1 = y1.max(below + MIN_CROP.1);
         }
     }
     let mut b = [area[0], area[1], area[0] + area[2], area[1] + area[3]];
+    // Each edge moves in past the glow, but never into the drawn mark.
+    let r = reach(&e.kind);
+    b = [
+        (b[0] + GLOW).min(left - r).max(b[0]),
+        (b[1] + GLOW).min(top - r).max(b[1]),
+        (b[2] - GLOW).max(right + r).min(b[2]),
+        (b[3] - GLOW).max(bottom + r).min(b[3]),
+    ];
     if let Some([wx, wy, ww, wh]) = e.window.as_ref().and_then(|w| w.rect) {
         b = [b[0].max(wx), b[1].max(wy), b[2].min(wx + ww), b[3].min(wy + wh)];
     }
@@ -262,8 +283,9 @@ mod tests {
             window: Some(window),
         };
         let map = Mapper::new(area, (1920, 1080));
-        // Min size 640x400 centred on the click, clamped at 0.
-        assert_eq!(crop_box(&mark(e), area, None, &map, (1920, 1080)), (0, 0, 370, 250));
+        // Min size 640x400 centred on the click, clamped to the window and kept clear of
+        // the 28 px edge glow.
+        assert_eq!(crop_box(&mark(e), area, None, &map, (1920, 1080)), (28, 28, 370, 250));
     }
 
     #[test]
@@ -284,9 +306,31 @@ mod tests {
         // A pin under the pill: the crop would reach y = 0, now starts at the pill's bottom.
         assert_eq!(crop_box(&mark(at(150.0)), area, pill, &map, (1920, 1080)), (640, 76, 1280, 476));
         // A pin beside or just under the pill is kept as is: cropping the pill out would
-        // cut the drawn mark.
-        assert_eq!(crop_box(&mark(at(50.0)), area, pill, &map, (1920, 1080)).1, 0);
-        assert_eq!(crop_box(&mark(at(80.0)), area, pill, &map, (1920, 1080)).1, 0);
+        // cut the drawn mark. (They still clear the top glow, so the crop starts at 28.)
+        assert_eq!(crop_box(&mark(at(50.0)), area, pill, &map, (1920, 1080)).1, 28);
+        assert_eq!(crop_box(&mark(at(80.0)), area, pill, &map, (1920, 1080)).1, 28);
+    }
+
+    #[test]
+    fn crop_stays_clear_of_the_edge_glow() {
+        let area = [0.0, 0.0, 1920.0, 1080.0];
+        let map = Mapper::new(area, (1920, 1080));
+        let line = |x0: f64, x1: f64| Event {
+            t: 0.0,
+            kind: Kind::Stroke,
+            t_end: None,
+            frame_t: None,
+            points: vec![[x0, 600.0], [x1, 600.0]],
+            x: None,
+            y: None,
+            window: None,
+        };
+        // An underline ending 60 px from the right edge: the crop stops short of the glow.
+        assert_eq!(crop_box(&mark(line(1300.0, 1860.0)), area, None, &map, (1920, 1080)).2, 1892);
+        // One ending inside the glow: the crop ends right at the line (2 px past it).
+        assert_eq!(crop_box(&mark(line(1300.0, 1905.0)), area, None, &map, (1920, 1080)).2, 1907);
+        // One running off the edge keeps the edge.
+        assert_eq!(crop_box(&mark(line(1300.0, 1920.0)), area, None, &map, (1920, 1080)).2, 1920);
     }
 
     #[test]
