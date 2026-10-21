@@ -2,11 +2,13 @@
 //!
 //!     Start()        -> new bundle dir; starts recording the microphone into it
 //!     Finish(json)   -> bundle dir; stops the mic and queues the bundle to be built
+//!     Retry(dir)     -> queues a bundle whose build failed to be built again
 //!     Cancel()       -> stops the mic and deletes the bundle dir
 //!     MicSilent()    -> true if the mic has recorded only near-silence for 3 s
 //!     MicLevel()     -> how loud the mic was over the last 0.1 s, 0 to 1
 //!     signal BundleReady(path) when a bundle is finished
-//!     signal BundleFailed(path) when building it failed (also a desktop notification)
+//!     signal BundleFailed(path, reason) when building it failed; `reason` is one
+//!            sentence for the user, the full error is in the bundle's error.txt
 //!
 //! Started on demand by D-Bus activation (see install.sh).
 
@@ -17,7 +19,9 @@ use anyhow::Result;
 use futures_util::StreamExt;
 use zbus::{Connection, fdo, interface};
 
+use crate::bundle::Finished;
 use crate::capture::Capture;
+use crate::fix;
 use crate::media::{self, Mic};
 use crate::{bundle, captures_dir};
 
@@ -47,12 +51,10 @@ impl Recording {
     }
 }
 
-/// A finished capture waiting to be built: its dir, the extension's data, mic start.
-type Build = (PathBuf, Capture, f64);
-
 struct Service {
     rec: Arc<Mutex<Recording>>,
-    builds: mpsc::Sender<Build>,
+    /// Bundle dirs waiting to be built (each has its finish.json).
+    builds: mpsc::Sender<PathBuf>,
 }
 
 #[interface(name = "org.sketchnote.Service")]
@@ -72,9 +74,18 @@ impl Service {
         let mut rec = self.rec.lock().unwrap();
         let dir = rec.dir.take().ok_or_else(|| fdo::Error::Failed("no capture in progress".into()))?;
         rec.stop_mic();
+        bundle::save_finished(&dir, &Finished { capture, mic_t0: rec.mic_t0 }).map_err(failed)?;
         let path = dir.display().to_string();
-        self.builds.send((dir, capture, rec.mic_t0)).map_err(failed)?;
+        self.builds.send(dir).map_err(failed)?;
         Ok(path)
+    }
+
+    fn retry(&self, dir: &str) -> fdo::Result<()> {
+        let dir = PathBuf::from(dir);
+        if dir.parent() != Some(&captures_dir()) || !dir.join("finish.json").exists() {
+            return Err(fdo::Error::Failed(format!("{} isn't a finished capture", dir.display())));
+        }
+        self.builds.send(dir).map_err(failed)
     }
 
     fn cancel(&self) {
@@ -111,31 +122,38 @@ fn new_bundle_dir() -> std::io::Result<PathBuf> {
 /// Builds bundles one at a time, in the order they were finished. So the newest capture
 /// is always the last BundleReady (the one the extension pastes), and transcriptions
 /// don't compete for the CPU.
-fn build_all(conn: Connection, queue: mpsc::Receiver<Build>) {
+fn build_all(conn: Connection, queue: mpsc::Receiver<PathBuf>) {
     media::be_nice();
-    for (dir, capture, mic_t0) in queue {
-        match bundle::build(&dir, &capture, mic_t0) {
-            // The extension's pill shows "Ready"; a notification would just repeat it.
-            Ok(()) => emit(&conn, "BundleReady", dir.display().to_string()),
+    for dir in queue {
+        let path = dir.display().to_string();
+        let error_file = dir.join("error.txt");
+        match bundle::build(&dir) {
+            Ok(()) => {
+                let _ = std::fs::remove_file(&error_file);
+                emit(&conn, "BundleReady", &(path,));
+            }
             Err(e) => {
-                eprintln!("building {}: {e:#}", dir.display());
-                media::notify("Sketchnote failed", &format!("Could not build {}; see the journal", dir.display()));
-                emit(&conn, "BundleFailed", dir.display().to_string());
+                eprintln!("building {path}: {e:#}");
+                let _ = std::fs::write(&error_file, format!("{e:#}\n"));
+                let reason = fix::explain(&e, &error_file.display().to_string());
+                emit(&conn, "BundleFailed", &(path, reason));
             }
         }
     }
 }
 
-/// Sends `signal(path)`, once; the extension updates its status pill from it.
-fn emit(conn: &Connection, signal: &str, path: String) {
-    if let Err(e) = zbus::block_on(conn.emit_signal(None::<&str>, PATH, NAME, signal, &(path,))) {
+/// Sends `signal` once; the extension updates its pill and notifications from it.
+fn emit<B: serde::Serialize + zbus::zvariant::DynamicType>(conn: &Connection, signal: &str, body: &B) {
+    if let Err(e) = zbus::block_on(conn.emit_signal(None::<&str>, PATH, NAME, signal, body)) {
         eprintln!("{signal}: {e}");
     }
 }
 
-fn failed(e: impl std::fmt::Display) -> fdo::Error {
+/// A D-Bus error for the extension to show: a known cause's sentence, else the error.
+fn failed(e: impl Into<anyhow::Error>) -> fdo::Error {
+    let e = e.into();
     eprintln!("{e:#}");
-    fdo::Error::Failed(format!("{e:#}"))
+    fdo::Error::Failed(fix::known(&e).unwrap_or_else(|| format!("{e:#}")))
 }
 
 /// Serves until killed. Never leaves the mic running if we're stopped or GNOME Shell

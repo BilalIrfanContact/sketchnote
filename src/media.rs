@@ -1,4 +1,4 @@
-//! External tools: ffmpeg for video, pw-record for the mic, notify-send.
+//! External tools: ffmpeg for video, pw-record for the mic.
 
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -6,6 +6,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use image::RgbaImage;
+
+use crate::fix::Fix;
 
 /// Microseconds on CLOCK_MONOTONIC, the clock GNOME Shell's `GLib.get_monotonic_time` uses.
 pub fn monotonic_us() -> f64 {
@@ -71,7 +73,13 @@ impl Mic {
         if let Ok(target) = std::env::var("SKETCHNOTE_MIC_TARGET") {
             cmd.args(["--target", &target]); // e.g. a test source
         }
-        Ok(Mic(cmd.arg(wav).spawn().context("starting pw-record")?))
+        match cmd.arg(wav).spawn() {
+            Ok(child) => Ok(Mic(child)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(Fix(
+                "pw-record isn't installed, so the mic can't be recorded. Install PipeWire's command-line tools, then try again.".into(),
+            ))?,
+            Err(e) => Err(e).context("starting pw-record"),
+        }
     }
 
     /// True if the last `MIC_CHECK_SECS` of the recording so far are near digital silence
@@ -100,9 +108,20 @@ impl Mic {
 }
 
 fn run(cmd: &mut Command) -> Result<Vec<u8>> {
-    let out = cmd.stderr(Stdio::piped()).output().with_context(|| format!("running {cmd:?}"))?;
+    let out = match cmd.stderr(Stdio::piped()).output() {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            let program = cmd.get_program().to_string_lossy();
+            Err(Fix(format!("{program} isn't installed. Install ffmpeg with your package manager, then retry.")))?
+        }
+        out => out.with_context(|| format!("running {cmd:?}"))?,
+    };
     if !out.status.success() {
-        bail!("{cmd:?} failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        // ffmpeg reports a full disk only in its output; make it an error `fix` recognizes.
+        if stderr.contains("No space left on device") {
+            Err(std::io::Error::from(std::io::ErrorKind::StorageFull)).with_context(|| format!("{cmd:?}: {stderr}"))?;
+        }
+        bail!("{cmd:?} failed: {}", stderr.trim());
     }
     Ok(out.stdout)
 }
@@ -158,13 +177,16 @@ pub fn grab_frame(video: &Path, t: f64) -> Result<RgbaImage> {
     Ok(image::load_from_memory(&png)?.to_rgba8())
 }
 
-pub fn notify(title: &str, body: &str) {
-    let _ = Command::new("notify-send").args(["--app-name=Sketchnote", title, body]).status();
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tool_running_out_of_disk_is_explained_as_a_full_disk() {
+        let e =
+            run(Command::new("sh").args(["-c", "echo 'out.mp4: No space left on device' >&2; exit 1"])).unwrap_err();
+        assert_eq!(crate::fix::known(&e).as_deref(), Some("The disk is full. Free some space, then retry."));
+    }
 
     #[test]
     fn only_near_digital_silence_counts_as_silent() {
