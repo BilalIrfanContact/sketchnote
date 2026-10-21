@@ -10,10 +10,13 @@
 //!     signal BundleFailed(path, reason) when building it failed; `reason` is one
 //!            sentence for the user, the full error is in the bundle's error.txt
 //!
-//! Started on demand by D-Bus activation (see install.sh).
+//! Started on demand by D-Bus activation (see install.sh). While running, it deletes
+//! captures older than `KEEP_CAPTURES`, checking once an hour.
 
-use std::path::PathBuf;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, mpsc};
+use std::time::{Duration, SystemTime};
 
 use anyhow::Result;
 use futures_util::StreamExt;
@@ -27,6 +30,9 @@ use crate::{bundle, captures_dir};
 
 const NAME: &str = "org.sketchnote.Service";
 const PATH: &str = "/org/sketchnote/Service";
+/// Captures hold full-screen video and mic audio, and are pasted within minutes, so
+/// they're only kept this long after they last changed.
+const KEEP_CAPTURES: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// The capture in progress, if any.
 #[derive(Default)]
@@ -51,10 +57,16 @@ impl Recording {
     }
 }
 
+/// Bundle dirs cleanup must not touch: the one being recorded, and every one queued or
+/// being built. A dir is added on Start or Retry and removed once its build is done.
+/// (A cancelled recording's dir stays listed, harmlessly: it's already deleted.)
+type InUse = Arc<Mutex<HashSet<PathBuf>>>;
+
 struct Service {
     rec: Arc<Mutex<Recording>>,
     /// Bundle dirs waiting to be built (each has its finish.json).
     builds: mpsc::Sender<PathBuf>,
+    in_use: InUse,
 }
 
 #[interface(name = "org.sketchnote.Service")]
@@ -63,6 +75,7 @@ impl Service {
         let mut rec = self.rec.lock().unwrap();
         rec.cancel();
         let dir = new_bundle_dir().map_err(failed)?;
+        self.in_use.lock().unwrap().insert(dir.clone());
         rec.mic = Some(Mic::start(&dir.join("audio.wav")).map_err(failed)?);
         rec.mic_t0 = media::monotonic_us();
         rec.dir = Some(dir.clone());
@@ -74,17 +87,29 @@ impl Service {
         let mut rec = self.rec.lock().unwrap();
         let dir = rec.dir.take().ok_or_else(|| fdo::Error::Failed("no capture in progress".into()))?;
         rec.stop_mic();
-        bundle::save_finished(&dir, &Finished { capture, mic_t0: rec.mic_t0 }).map_err(failed)?;
         let path = dir.display().to_string();
-        self.builds.send(dir).map_err(failed)?;
+        let queued = bundle::save_finished(&dir, &Finished { capture, mic_t0: rec.mic_t0 })
+            .and_then(|()| Ok(self.builds.send(dir.clone())?));
+        if queued.is_err() {
+            self.in_use.lock().unwrap().remove(&dir); // never built, so cleanup may have it
+        }
+        queued.map_err(failed)?;
         Ok(path)
     }
 
     fn retry(&self, dir: &str) -> fdo::Result<()> {
         let dir = PathBuf::from(dir);
+        // Checked and claimed under the lock cleanup deletes under, so it can't slip in between.
+        let mut in_use = self.in_use.lock().unwrap();
+        if in_use.contains(&dir) {
+            return Ok(()); // already queued or building
+        }
         if dir.parent() != Some(&captures_dir()) || !dir.join("finish.json").exists() {
             return Err(fdo::Error::Failed(format!("{} isn't a finished capture", dir.display())));
         }
+        // Retrying counts as a change, so the capture gets another day.
+        std::fs::File::open(&dir).and_then(|d| d.set_modified(SystemTime::now())).map_err(failed)?;
+        in_use.insert(dir.clone());
         self.builds.send(dir).map_err(failed)
     }
 
@@ -122,22 +147,44 @@ fn new_bundle_dir() -> std::io::Result<PathBuf> {
 /// Builds bundles one at a time, in the order they were finished. So the newest capture
 /// is always the last BundleReady (the one the extension pastes), and transcriptions
 /// don't compete for the CPU.
-fn build_all(conn: Connection, queue: mpsc::Receiver<PathBuf>) {
+fn build_all(conn: Connection, queue: mpsc::Receiver<PathBuf>, in_use: InUse) {
     media::be_nice();
     for dir in queue {
         let path = dir.display().to_string();
         let error_file = dir.join("error.txt");
-        match bundle::build(&dir) {
+        let failure = match bundle::build(&dir) {
             Ok(()) => {
                 let _ = std::fs::remove_file(&error_file);
-                emit(&conn, "BundleReady", &(path,));
+                None
             }
             Err(e) => {
                 eprintln!("building {path}: {e:#}");
                 let _ = std::fs::write(&error_file, format!("{e:#}\n"));
-                let reason = fix::explain(&e, &error_file.display().to_string());
-                emit(&conn, "BundleFailed", &(path, reason));
+                Some(fix::explain(&e, &error_file.display().to_string()))
             }
+        };
+        // Released before the signal, so a Retry it prompts isn't taken for a duplicate.
+        in_use.lock().unwrap().remove(&dir);
+        match failure {
+            None => emit(&conn, "BundleReady", &(path,)),
+            Some(reason) => emit(&conn, "BundleFailed", &(path, reason)),
+        }
+    }
+}
+
+/// Deletes the `*.bundle` dirs in `captures` that last changed more than `keep` ago and
+/// aren't `in_use`.
+fn delete_old_captures(captures: &Path, keep: Duration, in_use: &Mutex<HashSet<PathBuf>>) {
+    let Ok(entries) = std::fs::read_dir(captures) else { return };
+    for dir in entries.flatten().map(|e| e.path()) {
+        let in_use = in_use.lock().unwrap(); // held until this dir is decided and deleted
+        let age = dir.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok());
+        if dir.extension().is_some_and(|x| x == "bundle")
+            && !in_use.contains(&dir)
+            && age.is_some_and(|a| a > keep)
+            && let Err(e) = std::fs::remove_dir_all(&dir)
+        {
+            eprintln!("deleting {}: {e}", dir.display());
         }
     }
 }
@@ -163,9 +210,17 @@ pub fn run() -> Result<()> {
         let conn = Connection::session().await?;
         let rec = Arc::new(Mutex::new(Recording::default()));
         let (builds, queue) = mpsc::channel();
-        let worker = conn.clone();
-        std::thread::spawn(move || build_all(worker, queue));
-        conn.object_server().at(PATH, Service { rec: rec.clone(), builds }).await?;
+        let in_use = InUse::default();
+        let (worker, building) = (conn.clone(), in_use.clone());
+        std::thread::spawn(move || build_all(worker, queue, building));
+        let cleaning = in_use.clone();
+        std::thread::spawn(move || {
+            loop {
+                delete_old_captures(&captures_dir(), KEEP_CAPTURES, &cleaning);
+                std::thread::sleep(Duration::from_secs(60 * 60));
+            }
+        });
+        conn.object_server().at(PATH, Service { rec: rec.clone(), builds, in_use }).await?;
         conn.request_name(NAME).await?;
 
         let on_term = rec.clone();
@@ -183,4 +238,28 @@ pub fn run() -> Result<()> {
         }
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_old_bundles_not_in_use_are_deleted() {
+        let captures = std::env::temp_dir().join(format!("sketchnote-cleanup-{}", std::process::id()));
+        let day_ago = SystemTime::now() - Duration::from_secs(25 * 60 * 60);
+        for name in ["old.bundle", "old-building.bundle", "new.bundle", "old-other"] {
+            std::fs::create_dir_all(captures.join(name)).unwrap();
+        }
+        for name in ["old.bundle", "old-building.bundle", "old-other"] {
+            std::fs::File::open(captures.join(name)).unwrap().set_modified(day_ago).unwrap();
+        }
+        let in_use = Mutex::new(HashSet::from([captures.join("old-building.bundle")]));
+        delete_old_captures(&captures, KEEP_CAPTURES, &in_use);
+        let mut left: Vec<_> =
+            std::fs::read_dir(&captures).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+        left.sort();
+        std::fs::remove_dir_all(&captures).unwrap();
+        assert_eq!(left, ["new.bundle", "old-building.bundle", "old-other"]);
+    }
 }
