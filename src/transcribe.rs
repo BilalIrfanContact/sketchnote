@@ -32,23 +32,35 @@ pub struct Model {
 
 impl Model {
     pub fn parse(name: &str) -> Result<Model> {
-        let size = name.split_once("-q").map_or(name, |(size, _)| size);
-        let preset = match size {
-            "tiny" => DtwModelPreset::Tiny,
-            "tiny.en" => DtwModelPreset::TinyEn,
-            "base" => DtwModelPreset::Base,
-            "base.en" => DtwModelPreset::BaseEn,
-            "small" => DtwModelPreset::Small,
-            "small.en" => DtwModelPreset::SmallEn,
-            "medium" => DtwModelPreset::Medium,
-            "medium.en" => DtwModelPreset::MediumEn,
-            "large-v3" => DtwModelPreset::LargeV3,
-            "large-v3-turbo" => DtwModelPreset::LargeV3Turbo,
-            _ => Err(Fix(format!(
-                "\"{name}\" in {} isn't a speech model Sketchnote knows. Use tiny, base, small, medium, large-v3 or large-v3-turbo, optionally with .en or -q5_0, -q5_1 or -q8_0, then retry.",
+        let unknown = |hint: String| -> anyhow::Error {
+            Fix(format!(
+                "\"{name}\" in {} isn't a speech model Sketchnote knows. {hint} Fix it, then retry.",
                 crate::config::path().display()
-            )))?,
+            ))
+            .into()
         };
+        let (size, quant) = name.split_once("-q").map_or((name, ""), |(size, q)| (size, q));
+        // The quantized files published upstream for each size.
+        let (preset, quants): (_, &[&str]) = match size {
+            "tiny" => (DtwModelPreset::Tiny, &["5_1", "8_0"]),
+            "tiny.en" => (DtwModelPreset::TinyEn, &["5_1", "8_0"]),
+            "base" => (DtwModelPreset::Base, &["5_1", "8_0"]),
+            "base.en" => (DtwModelPreset::BaseEn, &["5_1", "8_0"]),
+            "small" => (DtwModelPreset::Small, &["5_1", "8_0"]),
+            "small.en" => (DtwModelPreset::SmallEn, &["5_1", "8_0"]),
+            "medium" => (DtwModelPreset::Medium, &["5_0", "8_0"]),
+            "medium.en" => (DtwModelPreset::MediumEn, &["5_0", "8_0"]),
+            "large-v3" => (DtwModelPreset::LargeV3, &["5_0"]),
+            "large-v3-turbo" => (DtwModelPreset::LargeV3Turbo, &["5_0", "8_0"]),
+            _ => Err(unknown(
+                "Use tiny, base, small, medium, large-v3 or large-v3-turbo, optionally with .en (not for large) and a -q suffix."
+                    .into(),
+            ))?,
+        };
+        if !quant.is_empty() && !quants.contains(&quant) {
+            let names: Vec<_> = quants.iter().map(|q| format!("{size}-q{q}")).collect();
+            Err(unknown(format!("{size} comes as {size} or {}.", names.join(" or "))))?;
+        }
         Ok(Model { name: name.into(), preset })
     }
 
@@ -225,7 +237,11 @@ mod tests {
         assert!(m.file().ends_with("ggml-large-v3-turbo-q8_0.bin"));
         assert!(matches!(m.preset, DtwModelPreset::LargeV3Turbo));
         assert!(matches!(Model::parse("tiny.en").unwrap().preset, DtwModelPreset::TinyEn));
-        let e = Model::parse("huge").err().unwrap();
-        assert!(crate::fix::known(&e).unwrap().starts_with("\"huge\" in "));
+        for bad in ["huge", "tiny-q8_O", "large-v3-q8_0", "small-q5_0"] {
+            let e = Model::parse(bad).err().unwrap();
+            assert!(crate::fix::known(&e).unwrap().starts_with(&format!("\"{bad}\" in ")), "{bad}");
+        }
+        let e = Model::parse("large-v3-q8_0").err().unwrap();
+        assert!(crate::fix::known(&e).unwrap().contains("large-v3 comes as large-v3 or large-v3-q5_0."));
     }
 }
