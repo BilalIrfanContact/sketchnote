@@ -537,6 +537,9 @@ export default class Sketchnote extends Extension {
     _finish() {
         const s = this._session;
         const end = now();
+        // Where the pill sat, so the service can crop it out of keyframes.
+        const p = this._ui?.pill.actor;
+        s.pill = p ? [p.x, p.y, p.width, p.height] : null;
         this._session = null;
         this._hideUi();
         this._owner = s;
@@ -557,7 +560,7 @@ export default class Sketchnote extends Extension {
         }
         const capture = {
             t0: s.t0, end, video_t0: s.videoT0, video: s.video,
-            area: s.area, window: s.focus, events: s.events,
+            area: s.area, pill: s.pill, window: s.focus, events: s.events,
         };
         try {
             await service('Finish', new GLib.Variant('(s)', [JSON.stringify(capture)]), '(s)');
