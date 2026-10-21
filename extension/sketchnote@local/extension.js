@@ -206,6 +206,9 @@ class Pill {
         this._timer = new St.Label({style_class: 'sketchnote-timer', text: '',
             y_align: Clutter.ActorAlign.CENTER});
         this.actor.add_child(this._timer);
+        this._micWarning = new St.Label({style_class: 'sketchnote-mic-warning', text: 'Mic is silent',
+            y_align: Clutter.ActorAlign.CENTER, visible: false});
+        this.actor.add_child(this._micWarning);
         this._sep = new St.Widget({style_class: 'sketchnote-sep'});
         this.actor.add_child(this._sep);
 
@@ -248,6 +251,10 @@ class Pill {
         for (const b of [this.undo, this._cancel, this._finish])
             b.visible = false;
         this.setState(state, text);
+    }
+
+    setMicSilent(silent) {
+        this._micWarning.visible = silent;
     }
 
     setTime(seconds) {
@@ -622,6 +629,14 @@ export default class Sketchnote extends Extension {
         const ui = this._ui;
         ui.pill.setState('recording');
         ui.pill.setTime((now() - this._session.t0) / 1e6);
+        // Warn while the mic hears only silence (muted, wrong device), so the capture
+        // isn't wasted. The service checks the last few seconds of the recording.
+        ui.micCheck = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+            service('MicSilent', null, '(b)')
+                .then(([silent]) => this._ui === ui && ui.pill.setMicSilent(silent))
+                .catch(logError);
+            return GLib.SOURCE_CONTINUE;
+        });
         ui.glows = Main.layoutManager.monitors.map(m => {
             const g = new St.Widget({style_class: 'sketchnote-glow', reactive: false,
                 x: m.x, y: m.y, width: m.width, height: m.height});
@@ -645,7 +660,7 @@ export default class Sketchnote extends Extension {
         this._stroke = null;
         this._spaceHeld = false;
         this._releaseGrab();
-        for (const id of [ui.clock, ui.poll])
+        for (const id of [ui.clock, ui.poll, ui.micCheck])
             if (id)
                 GLib.source_remove(id);
         ui.keys.forEach(k => this._ungrabKey(k));

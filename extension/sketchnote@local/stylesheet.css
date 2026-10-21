@@ -26,6 +26,12 @@
   padding: 0 8px 0 4px;
   min-width: 76px;
 }
+.sketchnote-mic-warning {
+  color: #ff9f0a;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 0 8px 0 0;
+}
 .sketchnote-sep {
   width: 1px;
   background-color: rgba(255, 255, 255, 0.15);
