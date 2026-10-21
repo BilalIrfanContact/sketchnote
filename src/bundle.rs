@@ -56,7 +56,8 @@ pub fn build(dir: &Path) -> Result<()> {
     }
     let video_size = media::probe_size(&video)?;
 
-    let words: Vec<Word> = transcribe::words(&dir.join("audio.wav"))?
+    let model = crate::configured_model()?;
+    let words: Vec<Word> = transcribe::words(&dir.join("audio.wav"), &model)?
         .into_iter()
         .map(|w| Word { start: w.start + audio_offset, end: w.end + audio_offset, ..w })
         .collect();

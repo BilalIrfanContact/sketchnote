@@ -14,11 +14,22 @@ Then **log out and back in once**. GNOME on Wayland only discovers new extension
 
 `install.sh` does three things:
 
-- Builds the `sketchnote` binary with cargo and downloads the Whisper `small` model (264 MB) and a voice detector into `~/.local/share/sketchnote/models/`.
+- Builds the `sketchnote` binary with cargo and downloads the speech model (Whisper `small`, 264 MB, unless you've picked another) and a voice detector into `~/.local/share/sketchnote/models/`.
 - Symlinks `extension/sketchnote@local` into `~/.local/share/gnome-shell/extensions/` and enables it.
 - Writes a D-Bus activation file so the service starts on demand.
 
 It is safe to re-run.
+
+### Choosing the speech model
+
+Transcription runs on your CPU with a whisper.cpp model. To use another one, create `~/.config/sketchnote/config.toml`:
+
+```toml
+[local]
+model = "large-v3-turbo-q8_0"
+```
+
+then run `./target/release/sketchnote download-model` (or `./install.sh` again) to download it. The next capture uses it; nothing needs restarting. Names are a size (`tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`), optionally `.en` for an English-only model and `-q5_0`/`-q5_1`/`-q8_0` for a smaller file, as listed on [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main). Bigger models hear you better and take longer: on a laptop CPU, 30 s of speech took 2 s with `tiny-q8_0` and 26 s with the default `small-q8_0`.
 
 Requirements: a Rust toolchain and `cmake` to build (whisper.cpp is compiled in), plus `ffmpeg` (with libx264), `pw-record` and `notify-send`, which Ubuntu with GNOME 50 already has.
 
@@ -115,7 +126,7 @@ These are the simplest options, picked deliberately. Change them freely.
 - **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`; the pill says **Starting…** until it's running. The mic starts within about 0.1 s, and both offsets are stored and applied. I've seen it take 14 s once. If you cancel or finish and immediately start again, the new capture waits for the previous recording to stop before it starts recording.
 - **Missed clicks.** Clicks are detected by polling every 10 ms, so a press shorter than that could be missed.
 - **Heavy work runs niced.** Building a bundle runs at nice 10, and transcription uses half the CPU cores, so the desktop stays responsive.
-- **CPU transcription, English only.** It takes roughly 0.5× real time. The language is fixed to English, because auto-detection was slower and sometimes picked the wrong language. To try another whisper.cpp model, set `SKETCHNOTE_MODEL=/path/to/ggml-model.bin` in the D-Bus service file's environment. `sketchnote transcribe file.wav` prints a recording's words with timestamps.
+- **CPU transcription, English only.** It takes roughly 0.5× real time. The language is fixed to English, because auto-detection was slower and sometimes picked the wrong language. See [Choosing the speech model](#choosing-the-speech-model) to trade speed for accuracy. `sketchnote transcribe file.wav` prints a recording's words with timestamps.
 
 ## Tests
 

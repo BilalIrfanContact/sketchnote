@@ -11,10 +11,9 @@ use whisper_rs::{
 use crate::capture::Word;
 use crate::fix::Fix;
 
-/// Whisper `small`, 8-bit quantized: the same model faster-whisper ran before.
-pub const MODEL: &str = "ggml-small-q8_0.bin";
 /// Silero voice detector; cuts silent stretches so Whisper doesn't hallucinate in them.
-pub const VAD_MODEL: &str = "ggml-silero-v5.1.2.bin";
+const VAD_MODEL: &str = "ggml-silero-v5.1.2.bin";
+const VAD_URL: &str = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin";
 
 const PROMPT: &str = "Okay, so here's the bug. This button should open the settings page.";
 
@@ -22,29 +21,91 @@ pub fn models_dir() -> PathBuf {
     crate::data_dir().join("models")
 }
 
+/// A whisper.cpp model, named as in its file `ggml-<name>.bin`: a size (`tiny`, `base`,
+/// `small`, `medium`, `large-v3`, `large-v3-turbo`), then optionally `.en` for an
+/// English-only model and `-q5_0` / `-q5_1` / `-q8_0` for a smaller quantized file.
+/// Bigger is more accurate and slower.
+pub struct Model {
+    name: String,
+    preset: DtwModelPreset,
+}
+
+impl Model {
+    pub fn parse(name: &str) -> Result<Model> {
+        let size = name.split_once("-q").map_or(name, |(size, _)| size);
+        let preset = match size {
+            "tiny" => DtwModelPreset::Tiny,
+            "tiny.en" => DtwModelPreset::TinyEn,
+            "base" => DtwModelPreset::Base,
+            "base.en" => DtwModelPreset::BaseEn,
+            "small" => DtwModelPreset::Small,
+            "small.en" => DtwModelPreset::SmallEn,
+            "medium" => DtwModelPreset::Medium,
+            "medium.en" => DtwModelPreset::MediumEn,
+            "large-v3" => DtwModelPreset::LargeV3,
+            "large-v3-turbo" => DtwModelPreset::LargeV3Turbo,
+            _ => Err(Fix(format!(
+                "\"{name}\" in {} isn't a speech model Sketchnote knows. Use tiny, base, small, medium, large-v3 or large-v3-turbo, optionally with .en or -q5_0, -q5_1 or -q8_0, then retry.",
+                crate::config::path().display()
+            )))?,
+        };
+        Ok(Model { name: name.into(), preset })
+    }
+
+    fn file(&self) -> PathBuf {
+        models_dir().join(format!("ggml-{}.bin", self.name))
+    }
+
+    fn url(&self) -> String {
+        format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin", self.name)
+    }
+}
+
+/// Downloads `model` and the voice detector, unless they're already there.
+pub fn download(model: &Model) -> Result<()> {
+    std::fs::create_dir_all(models_dir())?;
+    for (file, url) in [(model.file(), model.url()), (models_dir().join(VAD_MODEL), VAD_URL.into())] {
+        if file.exists() {
+            continue;
+        }
+        eprintln!("Downloading {}", url);
+        let part = file.with_extension("part");
+        let ok = std::process::Command::new("curl")
+            .args(["-fL", "--progress-bar", "-o"])
+            .arg(&part)
+            .arg(&url)
+            .status()
+            .context("running curl")?
+            .success();
+        ensure!(ok, "downloading {url} failed");
+        std::fs::rename(&part, &file)?;
+    }
+    Ok(())
+}
+
 /// Words with start/end seconds from a 16 kHz mono s16 WAV.
-pub fn words(wav: &Path) -> Result<Vec<Word>> {
+pub fn words(wav: &Path, model: &Model) -> Result<Vec<Word>> {
     let audio = read_wav(wav)?;
     if audio.len() < 1600 {
         return Ok(vec![]); // under 0.1 s: nothing to say
     }
-    let model = std::env::var("SKETCHNOTE_MODEL").map_or_else(|_| models_dir().join(MODEL), PathBuf::from);
     let vad = models_dir().join(VAD_MODEL);
-    if !model.exists() || !vad.exists() {
+    if !model.file().exists() || !vad.exists() {
         Err(Fix(format!(
-            "The speech model is missing from {}. Run install.sh to download it, then retry.",
-            models_dir().display()
+            "The speech model {} isn't downloaded yet. Run install.sh again to download it, then retry.",
+            model.name
         )))?;
     }
+    let model_file = model.file();
     whisper_rs::install_logging_hooks(); // keep whisper.cpp's chatter out of the journal
     // DTW timestamps: much closer to when each word was actually said than whisper's own.
     let mut cp = WhisperContextParameters::default();
     cp.dtw_parameters(DtwParameters {
-        mode: DtwMode::ModelPreset { model_preset: DtwModelPreset::Small },
+        mode: DtwMode::ModelPreset { model_preset: model.preset.clone() },
         ..DtwParameters::default()
     });
-    let ctx = WhisperContext::new_with_params(&model, cp)
-        .with_context(|| format!("loading {} (run install.sh)", model.display()))?;
+    let ctx = WhisperContext::new_with_params(&model_file, cp)
+        .with_context(|| format!("loading {}", model_file.display()))?;
     let mut state = ctx.create_state()?;
 
     // Greedy + English: on real captures this was faster than beam search, kept punctuation,
@@ -156,5 +217,15 @@ mod tests {
         let kept: Vec<_> = drop_sound_tags(words).into_iter().map(|w| w.word).collect();
         // An unclosed bracket stays, and doesn't swallow speech up to a later tag.
         assert_eq!(kept, [" This", " is", " fine", " ok", " [so", " use", " it", " [so"]);
+    }
+
+    #[test]
+    fn model_names_map_to_files_and_unknown_ones_are_explained() {
+        let m = Model::parse("large-v3-turbo-q8_0").unwrap();
+        assert!(m.file().ends_with("ggml-large-v3-turbo-q8_0.bin"));
+        assert!(matches!(m.preset, DtwModelPreset::LargeV3Turbo));
+        assert!(matches!(Model::parse("tiny.en").unwrap().preset, DtwModelPreset::TinyEn));
+        let e = Model::parse("huge").err().unwrap();
+        assert!(crate::fix::known(&e).unwrap().starts_with("\"huge\" in "));
     }
 }
