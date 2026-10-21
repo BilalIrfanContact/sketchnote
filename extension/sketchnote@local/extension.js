@@ -6,7 +6,7 @@
 // live in the Rust service (org.sketchnote.Service) on the session bus.
 //
 // While capturing:  hold Space + drag  = red stroke (fades on screen, kept in output)
-//                   Space + click      = numbered pin
+//                   Space + click      = pin (numbered in the notes)
 //                   plain click        = logged as a click event
 //                   Ctrl+Z = undo last stroke/pin,  Esc = cancel
 //
@@ -180,15 +180,10 @@ class Ink {
                     cr.lineTo(x, y);
                 cr.stroke();
             } else {
+                // No number yet: it's only final once the notes are built (a click
+                // nobody spoke about loses its number). Keyframes get the real one.
                 cr.arc(it.x, it.y, 13, 0, 2 * Math.PI);
                 cr.fill();
-                cr.setSourceRGBA(1, 1, 1, alpha);
-                cr.selectFontFace('Sans', Cairo.FontSlant.NORMAL, Cairo.FontWeight.BOLD);
-                cr.setFontSize(14);
-                const label = String(it.n);
-                const ext = cr.textExtents(label);
-                cr.moveTo(it.x - ext.width / 2 - ext.xBearing, it.y - ext.height / 2 - ext.yBearing);
-                cr.showText(label);
             }
         }
         cr.$dispose();
@@ -720,9 +715,9 @@ export default class Sketchnote extends Extension {
         const moved = Math.max(...item.points.map(([x, y]) => Math.hypot(x - x0, y - y0)));
         item.doneAt = now() / 1e6;
         if (moved < PIN_MAX_MOVE) {
-            // Space+click: turn it into a numbered pin (its number is its mark number).
+            // Space+click: turn it into a pin.
             item.points = null;
-            Object.assign(item, {x: x0, y: y0, n: this._session.events.length + 1});
+            Object.assign(item, {x: x0, y: y0});
             item.event = this._addEvent({type: 'pin', x: x0, y: y0, t: item.t});
         } else {
             item.event = this._addEvent({type: 'stroke', t: item.t, t_end: this._elapsed(),

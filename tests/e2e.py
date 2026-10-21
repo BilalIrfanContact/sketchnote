@@ -256,8 +256,10 @@ def main():
         first, second, third = [os.path.expanduser(f'~/.local/share/sketchnote/captures/{n}')
                          for n in sorted(latest_bundles() - before)]
         d1 = check_bundle(first)
-        assert [m['type'] for m in d1['marks']] == \
-            ['stroke', 'stroke', 'click', 'click', 'pin', 'stroke'], 'capture 1 marks'
+        # Clicks are numbered only if speech landed on them; every event still gets a line.
+        assert [m['type'] for m in d1['marks'] if m['type'] != 'click'] == \
+            ['stroke', 'stroke', 'pin', 'stroke'], 'capture 1 marks'
+        assert len(open(f'{first}/summary.md').read().splitlines()) == 6, 'capture 1 notes'
         assert d1['words'], 'capture 1 has speech'
         d2 = check_bundle(second)
         assert d2['area'] == [0, 0, 1920, 1080], d2['area']

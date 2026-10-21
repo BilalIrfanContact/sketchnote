@@ -62,9 +62,10 @@ Each capture is a folder `~/.local/share/sketchnote/captures/<timestamp>.bundle/
 `summary.md` looks like this:
 
 ```
-- #1 (0:04) “This footer has too much text, let's cut it down”
-- #2 (0:10) “and the model name here is out of date”
-- #3 (0:11) [clicked] “this button should open the settings instead”
+- #1 (0:04) “This footer has too much text, let's cut it down.”
+- (0:08) [clicked]
+- #2 (0:10) “And the model name here is out of date.”
+- #3 (0:11) [clicked] “This button should open the settings instead.”
 ```
 
 ## How it's built
@@ -86,9 +87,9 @@ These are the simplest options, picked deliberately. Change them freely.
 - **Hotkeys.** Scrawl's ⌥⇧S / ⌥⇧V become Alt+Shift+S / Alt+Shift+V. Hotkeys are constants at the top of `extension.js`. There's no settings UI.
 - **Pasting text and image together.** A clipboard holds one thing that apps reliably paste, so the extension pastes twice: notes first, then the contact sheet, 0.4 s apart. Alt+Shift+V waits until you release Alt and Shift, otherwise the app would see Ctrl+Alt+Shift+V.
 - **Whole screen only.** A capture always records the whole screen, all monitors as one image, so you can switch apps freely. There's no Area or Window mode; the contact sheet already crops each keyframe around your marks. There's no iPhone mode.
-- **Marks.** Every stroke, click and pin is its own mark; nothing is merged. Each mark gets the words spoken from its start until the next mark. Words spoken before the first mark go to #1. With no marks, the whole capture is one note keyed on the last frame.
+- **Marks.** Every stroke and pin is a numbered mark. A click is numbered only if something you said lands on it; otherwise it's listed as an unnumbered `- (0:07) [clicked]` line with no keyframe, unless the capture has only clicks and none were spoken about, in which case they're all numbered. Speech is kept as whole sentences: each sentence goes to the mark it overlaps most in time, counting from that mark until the next. A sentence is split at a mark only where you paused for 1 s or more, as when you circle three things saying "this part, … this part, … and this part". Words spoken before the first mark go to #1. If the transcript has no punctuation, words are split at marks by time. With no marks, the whole capture is one note keyed on the last frame.
 - **Note tags.** Clicks are tagged `[clicked]` and pins `[pin]`.
-- **Pins.** A red circle showing its mark number, fading like strokes.
+- **Pins.** A red dot that fades like strokes. It shows no number while you record, because numbers are only final once the notes are built (a click nobody spoke about loses its number); the keyframes show the real number.
 - **Undo.** Removes the last stroke or pin. Clicks can't be undone.
 - **Fade timing.** Strokes stay 0.5 s, then fade over 1 s.
 - **Clicks on screen.** Not shown live. Clicks on the pill or the top bar aren't logged.

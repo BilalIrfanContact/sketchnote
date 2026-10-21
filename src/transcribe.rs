@@ -64,8 +64,7 @@ pub fn words(wav: &Path) -> Result<Vec<Word>> {
     for i in 0..state.full_n_segments() {
         let seg = state.get_segment(i).context("segment")?;
         let text = seg.to_str_lossy()?;
-        // Skip empty segments and non-speech tags like [BLANK_AUDIO] or [MUSIC].
-        if text.trim().is_empty() || (text.trim().starts_with('[') && text.trim().ends_with(']')) {
+        if text.trim().is_empty() {
             continue;
         }
         // The word starts at its first real (non-special) token's DTW time.
@@ -78,7 +77,39 @@ pub fn words(wav: &Path) -> Result<Vec<Word>> {
         let start = secs(dtw.unwrap_or(seg.start_timestamp()));
         words.push(Word { word: text.into_owned(), start, end: secs(seg.end_timestamp()).max(start) });
     }
-    Ok(words)
+    Ok(drop_sound_tags(words))
+}
+
+/// Drops whisper's non-speech tags like `[BLANK_AUDIO]`, `[wind blowing]` or `(laughs)`.
+/// With one segment per word, a tag can arrive split over a few words. An opening bracket
+/// that isn't closed within `MAX_TAG_WORDS`, or before the next opening bracket, is kept
+/// as speech.
+fn drop_sound_tags(words: Vec<Word>) -> Vec<Word> {
+    const MAX_TAG_WORDS: usize = 6;
+    let mut kept = vec![];
+    let mut i = 0;
+    while i < words.len() {
+        let t = words[i].word.trim();
+        let closer = match t.chars().next() {
+            Some('[') => Some(']'),
+            Some('(') => Some(')'),
+            _ => None,
+        };
+        let opens = |w: &Word| w.word.trim_start().starts_with(['[', '(']);
+        let end = closer.and_then(|c| {
+            (i..words.len().min(i + MAX_TAG_WORDS))
+                .take_while(|&j| j == i || !opens(&words[j]))
+                .find(|&j| words[j].word.trim().ends_with(c))
+        });
+        match end {
+            Some(j) => i = j + 1,
+            None => {
+                kept.push(words[i].clone());
+                i += 1;
+            }
+        }
+    }
+    kept
 }
 
 fn read_wav(path: &Path) -> Result<Vec<f32>> {
@@ -89,4 +120,34 @@ fn read_wav(path: &Path) -> Result<Vec<f32>> {
         "expected 16 kHz mono s16 audio"
     );
     wav.samples::<i16>().map(|s| Ok(s? as f32 / 32768.0)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sound_tags_are_dropped_even_when_split_over_words() {
+        let words: Vec<Word> = [
+            " [wind",
+            " blowing]",
+            " This",
+            " is",
+            " [MUSIC]",
+            " fine",
+            " (laughs)",
+            " ok",
+            " [so",
+            " use",
+            " [MUSIC]",
+            " it",
+            " [so",
+        ]
+        .iter()
+        .map(|w| Word { word: w.to_string(), start: 0.0, end: 0.0 })
+        .collect();
+        let kept: Vec<_> = drop_sound_tags(words).into_iter().map(|w| w.word).collect();
+        // An unclosed bracket stays, and doesn't swallow speech up to a later tag.
+        assert_eq!(kept, [" This", " is", " fine", " ok", " [so", " use", " it", " [so"]);
+    }
 }
