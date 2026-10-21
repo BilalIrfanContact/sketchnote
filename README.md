@@ -71,6 +71,12 @@ Each capture is a folder `~/.local/share/sketchnote/captures/<timestamp>.bundle/
 - #3 (0:11) [clicked] “This button should open the settings instead.”
 ```
 
+## Privacy
+
+A capture records your **whole screen** (every monitor, whatever is on it) and your **microphone**, from Alt+Shift+S until you finish or cancel. Everything stays on your machine: transcription runs locally, and nothing is uploaded. Only what you paste leaves, and only to wherever you paste it.
+
+Captures are kept for **one day**. The service deletes any capture folder that hasn't changed in 24 hours, checking when it starts and every hour after. Cancelling a capture deletes it straight away. To delete everything sooner, remove `~/.local/share/sketchnote/captures/`. The retention period is `KEEP_CAPTURES` in `src/service.rs`; there's no settings UI.
+
 ## How it's built
 
 - **`extension/sketchnote@local/extension.js`** (GNOME Shell extension). It handles the hotkey, glow, pill, live ink, pins, click logging, undo and cancel. It records the screen through GNOME Shell's own Screencast service. Only the Shell may call that service, so there's no portal prompt and the recording code lives in the extension.

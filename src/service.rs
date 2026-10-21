@@ -10,10 +10,12 @@
 //!     signal BundleFailed(path, reason) when building it failed; `reason` is one
 //!            sentence for the user, the full error is in the bundle's error.txt
 //!
-//! Started on demand by D-Bus activation (see install.sh).
+//! Started on demand by D-Bus activation (see install.sh). While running, it deletes
+//! captures older than `KEEP_CAPTURES`, checking once an hour.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, mpsc};
+use std::time::{Duration, SystemTime};
 
 use anyhow::Result;
 use futures_util::StreamExt;
@@ -27,6 +29,9 @@ use crate::{bundle, captures_dir};
 
 const NAME: &str = "org.sketchnote.Service";
 const PATH: &str = "/org/sketchnote/Service";
+/// Captures hold full-screen video and mic audio, and are pasted within minutes, so
+/// they're only kept this long after they last changed.
+const KEEP_CAPTURES: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// The capture in progress, if any.
 #[derive(Default)]
@@ -85,6 +90,8 @@ impl Service {
         if dir.parent() != Some(&captures_dir()) || !dir.join("finish.json").exists() {
             return Err(fdo::Error::Failed(format!("{} isn't a finished capture", dir.display())));
         }
+        // Retrying counts as a change, so cleanup won't delete it mid-build.
+        std::fs::File::open(&dir).and_then(|d| d.set_modified(SystemTime::now())).map_err(failed)?;
         self.builds.send(dir).map_err(failed)
     }
 
@@ -142,6 +149,20 @@ fn build_all(conn: Connection, queue: mpsc::Receiver<PathBuf>) {
     }
 }
 
+/// Deletes the `*.bundle` dirs in `captures` that last changed more than `keep` ago.
+fn delete_old_captures(captures: &Path, keep: Duration) {
+    let Ok(entries) = std::fs::read_dir(captures) else { return };
+    for dir in entries.flatten().map(|e| e.path()) {
+        let age = dir.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok());
+        if dir.extension().is_some_and(|x| x == "bundle")
+            && age.is_some_and(|a| a > keep)
+            && let Err(e) = std::fs::remove_dir_all(&dir)
+        {
+            eprintln!("deleting {}: {e}", dir.display());
+        }
+    }
+}
+
 /// Sends `signal` once; the extension updates its pill and notifications from it.
 fn emit<B: serde::Serialize + zbus::zvariant::DynamicType>(conn: &Connection, signal: &str, body: &B) {
     if let Err(e) = zbus::block_on(conn.emit_signal(None::<&str>, PATH, NAME, signal, body)) {
@@ -165,6 +186,12 @@ pub fn run() -> Result<()> {
         let (builds, queue) = mpsc::channel();
         let worker = conn.clone();
         std::thread::spawn(move || build_all(worker, queue));
+        std::thread::spawn(|| {
+            loop {
+                delete_old_captures(&captures_dir(), KEEP_CAPTURES);
+                std::thread::sleep(Duration::from_secs(60 * 60));
+            }
+        });
         conn.object_server().at(PATH, Service { rec: rec.clone(), builds }).await?;
         conn.request_name(NAME).await?;
 
@@ -183,4 +210,27 @@ pub fn run() -> Result<()> {
         }
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_bundles_older_than_the_limit_are_deleted() {
+        let captures = std::env::temp_dir().join(format!("sketchnote-cleanup-{}", std::process::id()));
+        let day_ago = SystemTime::now() - Duration::from_secs(25 * 60 * 60);
+        for name in ["old.bundle", "new.bundle", "old-other"] {
+            std::fs::create_dir_all(captures.join(name)).unwrap();
+        }
+        for name in ["old.bundle", "old-other"] {
+            std::fs::File::open(captures.join(name)).unwrap().set_modified(day_ago).unwrap();
+        }
+        delete_old_captures(&captures, KEEP_CAPTURES);
+        let mut left: Vec<_> =
+            std::fs::read_dir(&captures).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+        left.sort();
+        std::fs::remove_dir_all(&captures).unwrap();
+        assert_eq!(left, ["new.bundle", "old-other"]);
+    }
 }
