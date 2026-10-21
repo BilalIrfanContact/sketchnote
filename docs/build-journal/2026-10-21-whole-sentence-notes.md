@@ -53,6 +53,7 @@ Words with no sentence end after them fall back to the old time split, each word
 - Replaying two of my older unpunctuated captures: the notes match the old time split, except that one click nobody spoke about lost its number.
 - `cargo test`: 10 tests pass, including the example above, the three-circle timings, the unpunctuated fallback, and a clicks-only capture (every click stays numbered).
 - `tests/e2e.py` passes.
+- My pin test turned up a filter bug: background noise came out as `[wind blowing]`, split over two words, which slipped past the non-speech filter and kept a silent click numbered. Tags split over words are now dropped too; re-transcribing that recording gives no words.
 
 ## Tradeoffs and limitations
 
