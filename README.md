@@ -89,7 +89,7 @@ These are the simplest options, picked deliberately. Change them freely.
 - **Whole screen only.** A capture always records the whole screen, all monitors as one image, so you can switch apps freely. There's no Area or Window mode; the contact sheet already crops each keyframe around your marks. There's no iPhone mode.
 - **Marks.** Every stroke and pin is a numbered mark. A click is numbered only if something you said lands on it; otherwise it's listed as an unnumbered `- (0:07) [clicked]` line with no keyframe, unless the capture has only clicks and none were spoken about, in which case they're all numbered. Speech is kept as whole sentences: each sentence goes to the mark it overlaps most in time, counting from that mark until the next. A sentence is split at a mark only where you paused for 1 s or more, as when you circle three things saying "this part, … this part, … and this part". Words spoken before the first mark go to #1. If the transcript has no punctuation, words are split at marks by time. With no marks, the whole capture is one note keyed on the last frame.
 - **Note tags.** Clicks are tagged `[clicked]` and pins `[pin]`.
-- **Pins.** A red circle showing its mark number, fading like strokes.
+- **Pins.** A red dot that fades like strokes. It shows no number while you record, because numbers are only final once the notes are built (a click nobody spoke about loses its number); the keyframes show the real number.
 - **Undo.** Removes the last stroke or pin. Clicks can't be undone.
 - **Fade timing.** Strokes stay 0.5 s, then fade over 1 s.
 - **Clicks on screen.** Not shown live. Clicks on the pill or the top bar aren't logged.

@@ -13,9 +13,10 @@ pub struct Notes {
 /// Turns events and words into notes.
 ///
 /// Speech is split into sentences (at `.`, `?`, `!`), and each sentence goes to the
-/// event whose span (from it until the next event) it overlaps most, so a sentence is
-/// cut in two unless you paused for `PAUSE` or longer at a mark inside it (pointing
-/// while saying "this part, … this part"). Unpunctuated speech is split by time instead. Speech before the first event counts toward the first. Strokes and
+/// event whose span (from it until the next event) it overlaps most. A sentence is kept
+/// whole unless you paused for `PAUSE` or longer at a mark inside it (pointing while
+/// saying "this part, … this part"). Unpunctuated speech is split by time instead.
+/// Speech before the first event counts toward the first. Strokes and
 /// pins are always numbered; a click is numbered only if it got words, otherwise it is
 /// listed without a number and gets no keyframe. If nothing would be numbered (only
 /// clicks, none spoken about), every event is. With no events at all the whole capture
