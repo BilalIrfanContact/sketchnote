@@ -25,6 +25,7 @@ import St from 'gi://St';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
 Gio._promisify(Gio.DBusConnection.prototype, 'call');
@@ -60,6 +61,28 @@ const service = (method, params, replyType) => call('org.sketchnote.Service',
     '/org/sketchnote/Service', 'org.sketchnote.Service', method, params, replyType);
 const screencast = (method, params, replyType) => call('org.gnome.Shell.Screencast',
     '/org/gnome/Shell/Screencast', 'org.gnome.Shell.Screencast', method, params, replyType);
+
+// A notification that stays in the message tray until dismissed. `actions` are
+// [label, callback] pairs, shown as buttons.
+function notifyProblem(title, body, actions = []) {
+    const source = MessageTray.getSystemSource();
+    const notification = new MessageTray.Notification({source, title, body});
+    for (const [label, callback] of actions)
+        notification.addAction(label, callback);
+    source.addNotification(notification);
+}
+
+// What to tell the user about a failed call: the service's own sentence, or what to do
+// when D-Bus can't start the service at all.
+function describe(e) {
+    const name = e instanceof GLib.Error ? Gio.DBusError.get_remote_error(e) : null;
+    if (name === 'org.freedesktop.DBus.Error.ServiceUnknown' ||
+        name?.startsWith('org.freedesktop.DBus.Error.Spawn'))
+        return "Sketchnote's background service isn't installed or won't start. Run install.sh, then try again.";
+    if (name)
+        Gio.DBusError.strip_remote_error(e);
+    return e.message;
+}
 
 // Newest bundle that has finished building (it has a summary.md), or null.
 function latestBundle() {
@@ -311,7 +334,10 @@ export default class Sketchnote extends Extension {
             (_c, _sender, _path, _iface, _signal, params) => this._onBundleReady(params.deepUnpack()[0]));
         this._failedId = Gio.DBus.session.signal_subscribe(null, 'org.sketchnote.Service',
             'BundleFailed', '/org/sketchnote/Service', null, Gio.DBusSignalFlags.NONE,
-            (_c, _sender, _path, _iface, _signal, params) => this._onBundleFailed(params.deepUnpack()[0]));
+            (_c, _sender, _path, _iface, _signal, params) => this._onBundleFailed(...params.deepUnpack()));
+        // If the service dies mid-build (say, whisper crashes), no signal ever comes.
+        this._serviceWatch = Gio.bus_watch_name(Gio.BusType.SESSION, 'org.sketchnote.Service',
+            Gio.BusNameWatcherFlags.NONE, null, () => this._onServiceGone());
         this._status = null;        // the after-capture status pill
         this._owner = null;         // the finished capture the status pill is about
         this._pasteLatestKey = this._grabKey(PASTE_LATEST_KEY, () => this._pasteLatest());
@@ -325,6 +351,7 @@ export default class Sketchnote extends Extension {
         this._hideStatus();
         Gio.DBus.session.signal_unsubscribe(this._readyId);
         Gio.DBus.session.signal_unsubscribe(this._failedId);
+        Gio.bus_unwatch_name(this._serviceWatch);
         this._selection.disconnect(this._ownerId);
         this._selection = null;
         this._keyboard = null;
@@ -407,10 +434,35 @@ export default class Sketchnote extends Extension {
             this._ownStatus(s, 'ready', 'Ready · Ctrl+V to paste', STATUS_MS);
     }
 
-    _onBundleFailed(dir) {
+    // `reason` is the service's sentence for the user; the recordings are kept, so the
+    // notification offers to build them again.
+    _onBundleFailed(dir, reason = 'Something unexpected went wrong.') {
         const s = this._owner;
         if (s?.dir === dir)
             this._ownStatus(s, 'failed', "Couldn't build the notes", STATUS_MS);
+        notifyProblem("Couldn't build the notes", reason, [['Retry', () => this._retry(dir)]]);
+    }
+
+    _onServiceGone() {
+        const s = this._owner;
+        if (s?.building) {
+            this._onBundleFailed(s.dir,
+                "Sketchnote's background service stopped while building the notes. Retry to build them again.");
+        }
+    }
+
+    // Builds a failed capture again; the pill follows it as it did after Finish.
+    async _retry(dir) {
+        const s = {dir, building: false};
+        this._owner = s;
+        this._showStatus('busy', 'Retrying…');
+        try {
+            await service('Retry', new GLib.Variant('(s)', [dir]));
+            s.building = true;
+        } catch (e) {
+            notifyProblem("Couldn't retry", describe(e));
+            this._ownStatus(s, 'failed', "Couldn't retry", STATUS_MS);
+        }
     }
 
     // --- clipboard: one Ctrl+V pastes the notes and the contact sheet ---------
@@ -522,14 +574,14 @@ export default class Sketchnote extends Extension {
             s.dir = dir;
             const [ok, used] = await this._screencast(GLib.build_filenamev([dir, 'screencast']));
             if (!ok)
-                throw new Error('GNOME Shell refused to start the screencast');
+                throw new Error("GNOME wouldn't start the screen recording. Try again; if it keeps failing, log out and back in.");
             s.video = used;
             s.videoT0 = now();
             if (s === this._session)
                 this._showRecording();
         } catch (e) {
             console.error(`sketchnote: start failed: ${e.message}`);
-            Main.notify('Sketchnote', `Could not start recording: ${e.message}`);
+            notifyProblem("Couldn't start recording", describe(e));
             if (s === this._session)
                 this._cancel();
         }
@@ -587,9 +639,10 @@ export default class Sketchnote extends Extension {
         };
         try {
             await service('Finish', new GLib.Variant('(s)', [JSON.stringify(capture)]), '(s)');
+            s.building = true;
             this._ownStatus(s, 'busy', 'Transcribing…');    // no-op if it's already Ready
         } catch (e) {
-            Main.notify('Sketchnote', `Could not save capture: ${e.message}`);
+            notifyProblem("Couldn't save the capture", describe(e));
             this._ownStatus(s, 'failed', "Couldn't save the capture", STATUS_MS);
         }
     }
