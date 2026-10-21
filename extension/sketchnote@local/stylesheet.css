@@ -38,7 +38,6 @@
   border-radius: 999px;
 }
 .sketchnote-btn:hover { background-color: rgba(255, 255, 255, 0.1); }
-.sketchnote-btn.selected { background-color: rgba(255, 255, 255, 0.16); }
 .sketchnote-btn:insensitive { color: rgba(255, 255, 255, 0.3); }
 .sketchnote-finish { background-color: #3b5bfd; color: white; font-weight: bold; }
 .sketchnote-finish:hover { background-color: #5571ff; }
@@ -55,11 +54,4 @@
 .sketchnote-glow-bottom, .sketchnote-glow-right {
   background-gradient-start: rgba(255, 59, 48, 0);
   background-gradient-end: rgba(255, 59, 48, 0.45);
-}
-
-/* Area picker. */
-.sketchnote-select { background-color: rgba(0, 0, 0, 0.3); }
-.sketchnote-select-rect {
-  border: 2px solid white;
-  background-color: rgba(255, 255, 255, 0.08);
 }
