@@ -55,7 +55,7 @@ Each capture is a folder `~/.local/share/sketchnote/captures/<timestamp>.bundle/
 | `audio.wav` | Microphone, 16 kHz mono |
 | `frames/frame-NN.png` | Keyframe per mark, cropped to the activity, annotations burned in |
 | `frames-full/frame-NN.png` | The same keyframes uncropped |
-| `contact-sheet.png` | Cropped keyframes in a two-column grid with number badges |
+| `contact-sheet.png` | Cropped keyframes in rows of two, in note order, with number badges |
 | `summary.md` | The handoff text, pasted by Ctrl+V or Alt+Shift+V |
 | `sketchnote.json` | Timings, strokes, clicks, pins, target window, word timestamps, marks |
 
@@ -101,7 +101,7 @@ These are the simplest options, picked deliberately. Change them freely.
 ## Known limitations
 
 - **Space is reserved while capturing.** Space is grabbed globally during a capture, so you can't type spaces into apps until you finish or cancel. Scrawl uses Shift; Space was chosen here so Shift keeps working in apps.
-- **The recording shows Sketchnote's own UI.** GNOME's screencast records everything on screen, so `recording.mp4` and the keyframes include the pill, the glow and the live strokes. The strokes in the keyframes are redrawn on top in the same spot.
+- **The recording shows Sketchnote's own UI.** GNOME's screencast records everything on screen, and GNOME Shell can't hide one of its actors from it, so `recording.mp4` includes the pill, the glow and the live strokes. Keyframe crops start below the pill when the mark is below it; a mark right next to the pill keeps it in view. The strokes in the keyframes are redrawn on top in the same spot.
 - **Pill placement.** The pill sits on the primary monitor.
 - **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`; the pill says **Starting…** until it's running. The mic starts within about 0.1 s, and both offsets are stored and applied. I've seen it take 14 s once. If you cancel or finish and immediately start again, the new capture waits for the previous recording to stop before it starts recording.
 - **Missed clicks.** Clicks are detected by polling every 10 ms, so a press shorter than that could be missed.
