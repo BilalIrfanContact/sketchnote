@@ -56,8 +56,9 @@ pub fn words(wav: &Path, api: &Api) -> Result<Vec<Word>> {
     if let Some(key) = &key {
         request = request.header("Authorization", &format!("Bearer {key}"));
     }
+    // Errors keep only a redacted description: ureq's own can quote response headers.
     let unreachable = |e: ureq::Error| {
-        anyhow::Error::new(e).context(Fix(format!(
+        anyhow::anyhow!("{}", redact(&e.to_string(), key.as_deref())).context(Fix(format!(
             "Couldn't reach {host}. Check your internet connection and the url in {}, then retry.",
             crate::config::path().display()
         )))
@@ -65,14 +66,14 @@ pub fn words(wav: &Path, api: &Api) -> Result<Vec<Word>> {
     let mut response = request.send(&body[..]).map_err(unreachable)?;
     let status = response.status().as_u16();
     let text = response.body_mut().read_to_string().map_err(unreachable)?;
-    // Whatever the server sends back may end up in error.txt and the journal.
-    let text = redact(&text, key.as_deref());
+    // What goes into errors (and so error.txt and the journal) is a redacted copy.
+    let shown = redact(&text, key.as_deref());
     if status != 200 {
         return Err(
-            anyhow::anyhow!("{host} returned {status}: {text}").context(Fix(explain(status, &text, &host, api)))
+            anyhow::anyhow!("{host} returned {status}: {shown}").context(Fix(explain(status, &shown, &host, api)))
         );
     }
-    let transcript: Transcript = serde_json::from_str(&text).with_context(|| format!("{host} returned: {text}"))?;
+    let transcript: Transcript = serde_json::from_str(&text).with_context(|| format!("{host} returned: {shown}"))?;
     let words = match transcript.words {
         Some(words) if !words.is_empty() || transcript.text.trim().is_empty() => words,
         _ => Err(Fix(no_word_timings(&host, api)))?,
