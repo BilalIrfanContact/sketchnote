@@ -14,10 +14,12 @@ pub struct Notes {
 ///
 /// Speech is split into sentences (at `.`, `?`, `!`), and each sentence goes to the
 /// event whose span (from it until the next event) it overlaps most, so a sentence is
-/// never cut in two. Unpunctuated speech is split by time instead. Speech before the first event counts toward the first. Strokes and
+/// cut in two unless you paused for `PAUSE` or longer at a mark inside it (pointing
+/// while saying "this part, … this part"). Unpunctuated speech is split by time instead. Speech before the first event counts toward the first. Strokes and
 /// pins are always numbered; a click is numbered only if it got words, otherwise it is
 /// listed without a number and gets no keyframe. If nothing would be numbered (only
-/// clicks, none spoken about), every event is. With no events at all the whole capture is one mark on the last frame.
+/// clicks, none spoken about), every event is. With no events at all the whole capture
+/// is one mark on the last frame.
 pub fn make_notes(events: &[Event], words: &[Word], duration: f64) -> Notes {
     let mut events = events.to_vec();
     events.sort_by(|a, b| a.t.total_cmp(&b.t));
@@ -38,18 +40,18 @@ pub fn make_notes(events: &[Event], words: &[Word], duration: f64) -> Notes {
         (start, events.get(i + 1).map_or(f64::INFINITY, |next| next.t))
     };
     let mut texts = vec![String::new(); events.len()];
-    for sentence in sentences(words) {
-        // A loose word (no sentence end) counts only at its start, matching the old time split.
-        let last = &sentence[sentence.len() - 1];
-        let (s, e) =
-            (sentence[0].start, if ends_sentence(last) { last.end.max(sentence[0].start) } else { sentence[0].start });
+    let times: Vec<f64> = events.iter().map(|e| e.t).collect();
+    for (piece, whole) in pieces(words, &times) {
+        // A loose word counts only at its start, matching the old time split.
+        let s = piece[0].start;
+        let e = if whole { piece[piece.len() - 1].end.max(s) } else { s };
         let overlap = |i: usize| {
             let (a, b) = span(i);
             if s == e { if a <= s && s < b { 1.0 } else { 0.0 } } else { (e.min(b) - s.max(a)).max(0.0) }
         };
         // Ties go to the earlier event.
         let best = (0..events.len()).fold(0, |best, i| if overlap(i) > overlap(best) { i } else { best });
-        texts[best].extend(sentence.iter().map(|w| w.word.as_str()));
+        texts[best].extend(piece.iter().map(|w| w.word.as_str()));
     }
 
     let numbered = |e: &Event, text: &str| e.kind != Kind::Click || !text.trim().is_empty();
@@ -73,19 +75,32 @@ pub fn make_notes(events: &[Event], words: &[Word], duration: f64) -> Notes {
     notes
 }
 
-/// Consecutive words grouped into sentences, each ending at `.`, `?` or `!`. Trailing
-/// words with no sentence end (all of them, if the transcript has no punctuation) come
-/// back one per "sentence", so they are split at events by time as before.
-fn sentences(words: &[Word]) -> Vec<&[Word]> {
+/// A silence this long (seconds) at a mark splits a sentence there.
+const PAUSE: f64 = 1.0;
+
+/// Speech cut into pieces to place at marks, each flagged `true` if it is (part of) a
+/// sentence. Sentences end at `.`, `?` or `!` and are cut where a pause of `PAUSE` or more
+/// contains a mark's time. Trailing words with no sentence end (all of them, if the
+/// transcript has no punctuation) come back one per piece, flagged `false`.
+fn pieces<'a>(words: &'a [Word], marks: &[f64]) -> Vec<(&'a [Word], bool)> {
     let mut out = vec![];
     let mut start = 0;
     for (i, w) in words.iter().enumerate() {
         if ends_sentence(w) {
-            out.push(&words[start..=i]);
+            let sentence = &words[start..=i];
+            let mut from = 0;
+            for (j, pair) in sentence.windows(2).enumerate() {
+                let (a, b) = (pair[0].end, pair[1].start);
+                if b - a >= PAUSE && marks.iter().any(|&t| a <= t && t <= b) {
+                    out.push((&sentence[from..=j], true));
+                    from = j + 1;
+                }
+            }
+            out.push((&sentence[from..], true));
             start = i + 1;
         }
     }
-    out.extend(words[start..].chunks(1));
+    out.extend(words[start..].chunks(1).map(|w| (w, false)));
     out
 }
 
@@ -183,6 +198,26 @@ mod tests {
              - (0:07) [clicked]\n\
              - #2 (0:09) “Then the header font is too big.”\n"
         );
+    }
+
+    #[test]
+    fn a_pause_at_a_mark_splits_a_sentence() {
+        // Circling three things while saying "This part, this part and this part.",
+        // pausing at each circle (timings from a real capture).
+        let w = |word: &str, start: f64, end: f64| Word { word: format!(" {word}"), start, end };
+        let words = [
+            w("This", 3.5, 3.5),
+            w("part,", 4.0, 4.0),
+            w("this", 6.0, 6.0),
+            w("part", 6.5, 6.5),
+            w("and", 8.2, 8.2),
+            w("this", 8.4, 8.4),
+            w("part.", 8.8, 9.4),
+            w("Done.", 9.5, 10.0),
+        ];
+        let notes = make_notes(&[stroke(2.3), stroke(4.9), stroke(7.3)], &words, 12.0);
+        let texts: Vec<_> = notes.marks.iter().map(|m| m.text.as_str()).collect();
+        assert_eq!(texts, ["This part,", "this part", "and this part. Done."]);
     }
 
     #[test]
