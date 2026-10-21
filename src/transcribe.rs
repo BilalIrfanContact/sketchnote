@@ -15,7 +15,8 @@ use crate::fix::Fix;
 const VAD_MODEL: &str = "ggml-silero-v5.1.2.bin";
 const VAD_URL: &str = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin";
 
-const PROMPT: &str = "Okay, so here's the bug. This button should open the settings page.";
+/// Shown to Whisper as earlier speech: it copies its casing and punctuation.
+pub const PROMPT: &str = "Okay, so here's the bug. This button should open the settings page.";
 
 pub fn models_dir() -> PathBuf {
     crate::data_dir().join("models")
@@ -164,7 +165,7 @@ pub fn words(wav: &Path, model: &Model) -> Result<Vec<Word>> {
 /// With one segment per word, a tag can arrive split over a few words. An opening bracket
 /// that isn't closed within `MAX_TAG_WORDS`, or before the next opening bracket, is kept
 /// as speech.
-fn drop_sound_tags(words: Vec<Word>) -> Vec<Word> {
+pub fn drop_sound_tags(words: Vec<Word>) -> Vec<Word> {
     const MAX_TAG_WORDS: usize = 6;
     let mut kept = vec![];
     let mut i = 0;
