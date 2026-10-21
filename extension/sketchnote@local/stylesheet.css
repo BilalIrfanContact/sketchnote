@@ -26,6 +26,18 @@
   padding: 0 8px 0 4px;
   min-width: 76px;
 }
+.sketchnote-meter {
+  width: 36px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 3px;
+  background-color: rgba(255, 255, 255, 0.15);
+}
+.sketchnote-meter-fill {
+  height: 6px;
+  border-radius: 3px;
+  background-color: #30d158;
+}
 .sketchnote-mic-warning {
   color: #ff9f0a;
   font-size: 13px;

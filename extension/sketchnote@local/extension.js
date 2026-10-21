@@ -42,6 +42,8 @@ const POLL_MS = 10;
 const GLOW_WIDTH = 28;         // px of red fade along each screen edge
 const STATUS_MS = 6000;        // a "Ready" or "Failed" status hides itself after this
 const DOT_STATES = ['starting', 'recording', 'busy', 'ready', 'failed'];
+const METER_WIDTH = 36;        // px; must match .sketchnote-meter in stylesheet.css
+const METER_MS = 100;
 
 const now = () => GLib.get_monotonic_time();   // µs, same clock as Python's time.monotonic
 const sleep = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
@@ -206,6 +208,12 @@ class Pill {
         this._timer = new St.Label({style_class: 'sketchnote-timer', text: '',
             y_align: Clutter.ActorAlign.CENTER});
         this.actor.add_child(this._timer);
+        // Mic level: a bar that follows your voice while recording.
+        this._meter = new St.Widget({style_class: 'sketchnote-meter', y_align: Clutter.ActorAlign.CENTER,
+            visible: false});
+        this._meterFill = new St.Widget({style_class: 'sketchnote-meter-fill', width: 0});
+        this._meter.add_child(this._meterFill);
+        this.actor.add_child(this._meter);
         this._micWarning = new St.Label({style_class: 'sketchnote-mic-warning', text: 'Mic is silent',
             y_align: Clutter.ActorAlign.CENTER, visible: false});
         this.actor.add_child(this._micWarning);
@@ -251,6 +259,13 @@ class Pill {
         for (const b of [this.undo, this._cancel, this._finish])
             b.visible = false;
         this.setState(state, text);
+    }
+
+    // `level` 0..1; jumps up at once, falls back smoothly so speech doesn't flicker.
+    setMicLevel(level) {
+        this._meter.visible = true;
+        const shown = Math.max(level, this._meterFill.width / METER_WIDTH * 0.75);
+        this._meterFill.width = Math.round(shown * METER_WIDTH);
     }
 
     setMicSilent(silent) {
@@ -629,6 +644,19 @@ export default class Sketchnote extends Extension {
         const ui = this._ui;
         ui.pill.setState('recording');
         ui.pill.setTime((now() - this._session.t0) / 1e6);
+        ui.pill.setMicLevel(0);
+        // Mic level bar, about 10 updates a second (skipped while a call is still out).
+        let asking = false;
+        ui.meter = GLib.timeout_add(GLib.PRIORITY_DEFAULT, METER_MS, () => {
+            if (!asking) {
+                asking = true;
+                service('MicLevel', null, '(d)')
+                    .then(([level]) => this._ui === ui && ui.pill.setMicLevel(level))
+                    .catch(logError)
+                    .finally(() => (asking = false));
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
         // Warn while the mic hears only silence (muted, wrong device), so the capture
         // isn't wasted. The service checks the last few seconds of the recording.
         ui.micCheck = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
@@ -660,7 +688,7 @@ export default class Sketchnote extends Extension {
         this._stroke = null;
         this._spaceHeld = false;
         this._releaseGrab();
-        for (const id of [ui.clock, ui.poll, ui.micCheck])
+        for (const id of [ui.clock, ui.poll, ui.meter, ui.micCheck])
             if (id)
                 GLib.source_remove(id);
         ui.keys.forEach(k => this._ungrabKey(k));

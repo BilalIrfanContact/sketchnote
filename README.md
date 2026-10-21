@@ -38,7 +38,7 @@ Requirements: a Rust toolchain and `cmake` to build (whisper.cpp is compiled in)
 Starting a capture starts the microphone at once and the screen recorder within a second or two. The pill at top centre always says which state it's in:
 
 - **Starting…** with a grey dot: the screen recorder isn't running yet.
-- **Recording**: a red dot and the timer, a red glow around the screen, and a stop icon in the top bar.
+- **Recording**: a red dot, the timer and a green mic level bar that follows your voice, a red glow around the screen, and a stop icon in the top bar. The bar uses a fixed −60 to 0 dBFS scale like system sound meters, so if it sits high while you're quiet, your input is noisy or its gain is too high.
 - **Mic is silent** in amber next to the timer: the mic has recorded only digital silence for the last 3 seconds (muted, or the wrong or a disconnected input). It clears as soon as sound comes in.
 - The pill has **Undo / Cancel / Finish**.
 
