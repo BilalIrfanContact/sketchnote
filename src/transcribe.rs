@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, ensure};
 use whisper_rs::{
     DtwMode, DtwModelPreset, DtwParameters, FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters,
-    WhisperVadParams,
+    WhisperVadContext, WhisperVadContextParams, WhisperVadParams,
 };
 
 use crate::capture::Word;
@@ -94,6 +94,40 @@ pub fn download(model: &Model) -> Result<()> {
         std::fs::rename(&part, &file)?;
     }
     Ok(())
+}
+
+/// The stretches of a 16 kHz mono s16 WAV where someone is speaking, as (start, end)
+/// seconds, found by the voice detector.
+pub fn speech(wav: &Path) -> Result<Vec<(f64, f64)>> {
+    let audio = read_wav(wav)?;
+    let vad = models_dir().join(VAD_MODEL);
+    if !vad.exists() {
+        Err(Fix("The voice detector model is missing. Run install.sh again to download it, then retry.".into()))?;
+    }
+    whisper_rs::install_logging_hooks();
+    let mut ctx = WhisperVadContext::new(vad.to_str().context("VAD model path")?, WhisperVadContextParams::new())?;
+    let found = ctx.segments_from_samples(WhisperVadParams::new(), &audio)?;
+    let secs = |cs: Option<f32>| cs.unwrap_or(0.0) as f64 / 100.0; // centiseconds -> s
+    Ok((0..found.num_segments())
+        .map(|i| (secs(found.get_segment_start_timestamp(i)), secs(found.get_segment_end_timestamp(i))))
+        .collect())
+}
+
+/// `words` moved onto the `speech` they belong to: each goes to the stretch of speech it
+/// overlaps most and is trimmed to it. Some APIs stretch words over the silence around
+/// them, which hides the pauses the notes split at; this brings them back. A word that
+/// overlaps no speech keeps its times.
+pub fn fit_to_speech(words: Vec<Word>, speech: &[(f64, f64)]) -> Vec<Word> {
+    words
+        .into_iter()
+        .map(|w| {
+            let overlap = |&(s, e): &(f64, f64)| w.end.min(e) - w.start.max(s);
+            match speech.iter().max_by(|a, b| overlap(a).total_cmp(&overlap(b))) {
+                Some(&(s, e)) if overlap(&(s, e)) > 0.0 => Word { start: w.start.max(s), end: w.end.min(e), ..w },
+                _ => w,
+            }
+        })
+        .collect()
 }
 
 /// Words with start/end seconds from a 16 kHz mono s16 WAV.
@@ -230,6 +264,17 @@ mod tests {
         let kept: Vec<_> = drop_sound_tags(words).into_iter().map(|w| w.word).collect();
         // An unclosed bracket stays, and doesn't swallow speech up to a later tag.
         assert_eq!(kept, [" This", " is", " fine", " ok", " [so", " use", " it", " [so"]);
+    }
+
+    #[test]
+    fn stretched_words_move_onto_the_speech_they_belong_to() {
+        // Groq's timings for "pause, then this" around a 3.5 s pause (a real capture).
+        let w = |word: &str, start, end| Word { word: word.into(), start, end };
+        let words =
+            vec![w(" pause,", 3.98, 5.08), w(" then", 5.08, 8.24), w(" this", 8.24, 8.56), w(" hm", 20.0, 21.0)];
+        let speech = [(3.43, 4.54), (8.07, 9.31)];
+        let fitted: Vec<_> = fit_to_speech(words, &speech).into_iter().map(|w| (w.start, w.end)).collect();
+        assert_eq!(fitted, [(3.98, 4.54), (8.07, 8.24), (8.24, 8.56), (20.0, 21.0)]);
     }
 
     #[test]

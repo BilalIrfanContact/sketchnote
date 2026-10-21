@@ -49,6 +49,8 @@ url = "https://api.groq.com/openai/v1"
 model = "whisper-large-v3-turbo"
 ```
 
+APIs tend to stretch each word over the silence around it, which would hide the pauses Sketchnote uses to split a sentence between the things you circled. So the returned words are re-timed on your machine against the speech the local voice detector finds in the recording.
+
 Then run `./target/release/sketchnote set-key` and paste your API key. It's stored in your desktop keyring (GNOME Keyring), one per `url`, never in the config file; leave it empty to remove it. If the provider rejects the key, runs out of credit or can't be reached, the notification says so, and Retry tries again once you've fixed it. `transcriber = "local"` (or no line at all) goes back to the model on your machine.
 
 Requirements: a Rust toolchain and `cmake` to build (whisper.cpp is compiled in), plus `ffmpeg` (with libx264), `pw-record` and `notify-send`, which Ubuntu with GNOME 50 already has.

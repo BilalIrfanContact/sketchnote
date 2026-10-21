@@ -79,9 +79,10 @@ pub fn words(wav: &Path, api: &Api) -> Result<Vec<Word>> {
         _ => Err(Fix(no_word_timings(&host, api)))?,
     };
     // Spaced like whisper.cpp's words, which the notes join as they are.
-    Ok(transcribe::drop_sound_tags(
-        words.into_iter().map(|w| Word { word: format!(" {}", w.word.trim()), start: w.start, end: w.end }).collect(),
-    ))
+    let words = words.into_iter().map(|w| Word { word: format!(" {}", w.word.trim()), start: w.start, end: w.end });
+    // API timings run words together over pauses; the local voice detector finds them again.
+    let speech = transcribe::speech(wav)?;
+    Ok(transcribe::drop_sound_tags(transcribe::fit_to_speech(words.collect(), &speech)))
 }
 
 fn no_word_timings(host: &str, api: &Api) -> String {

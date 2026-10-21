@@ -78,11 +78,15 @@ pub fn make_notes(events: &[Event], words: &[Word], duration: f64) -> Notes {
 
 /// A silence this long (seconds) at a mark splits a sentence there.
 const PAUSE: f64 = 1.0;
+/// A pause also counts for a mark started this soon after it: people often start the
+/// next sentence a moment before they start drawing.
+const MARK_LEAD: f64 = 0.5;
 
 /// Speech cut into pieces to place at marks, each flagged `true` if it is (part of) a
 /// sentence. Sentences end at `.`, `?` or `!` and are cut where a pause of `PAUSE` or more
-/// contains a mark's time. Trailing words with no sentence end (all of them, if the
-/// transcript has no punctuation) come back one per piece, flagged `false`.
+/// contains a mark's time (or ends up to `MARK_LEAD` before it). Trailing words with no
+/// sentence end (all of them, if the transcript has no punctuation) come back one per
+/// piece, flagged `false`.
 fn pieces<'a>(words: &'a [Word], marks: &[f64]) -> Vec<(&'a [Word], bool)> {
     let mut out = vec![];
     let mut start = 0;
@@ -92,7 +96,7 @@ fn pieces<'a>(words: &'a [Word], marks: &[f64]) -> Vec<(&'a [Word], bool)> {
             let mut from = 0;
             for (j, pair) in sentence.windows(2).enumerate() {
                 let (a, b) = (pair[0].end, pair[1].start);
-                if b - a >= PAUSE && marks.iter().any(|&t| a <= t && t <= b) {
+                if b - a >= PAUSE && marks.iter().any(|&t| a <= t && t <= b + MARK_LEAD) {
                     out.push((&sentence[from..=j], true));
                     from = j + 1;
                 }
@@ -219,6 +223,17 @@ mod tests {
         let notes = make_notes(&[stroke(2.3), stroke(4.9), stroke(7.3)], &words, 12.0);
         let texts: Vec<_> = notes.marks.iter().map(|m| m.text.as_str()).collect();
         assert_eq!(texts, ["This part,", "this part", "and this part. Done."]);
+    }
+
+    #[test]
+    fn a_pause_just_before_a_mark_splits_too() {
+        // Talking resumed 0.1 s before the circle was started (a real capture, words fitted
+        // to the voice detector's speech).
+        let w = |word: &str, start: f64, end: f64| Word { word: format!(" {word}"), start, end };
+        let words = [w("where", 3.04, 3.33), w("part", 3.55, 4.45), w("and", 8.26, 8.64), w("sidebar.", 9.67, 11.05)];
+        let notes = make_notes(&[stroke(2.51), stroke(5.51), stroke(9.75)], &words, 13.0);
+        let texts: Vec<_> = notes.marks.iter().map(|m| m.text.as_str()).collect();
+        assert_eq!(texts, ["where part", "and", "sidebar."]);
     }
 
     #[test]
