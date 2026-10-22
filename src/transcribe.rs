@@ -77,11 +77,16 @@ impl Model {
 /// Downloads `model` and the voice detector, unless they're already there.
 pub fn download(model: &Model) -> Result<()> {
     std::fs::create_dir_all(models_dir())?;
-    for (file, url) in [(model.file(), model.url()), (models_dir().join(VAD_MODEL), VAD_URL.into())] {
+    let model_name = format!("the speech model ({})", model.name);
+    let models = [
+        (model_name.as_str(), model.file(), model.url()),
+        ("the voice detector", models_dir().join(VAD_MODEL), VAD_URL.into()),
+    ];
+    for (what, file, url) in models {
         if file.exists() {
             continue;
         }
-        eprintln!("Downloading {}", url);
+        eprintln!("Downloading {what}"); // the URL only shows up if it fails
         let part = file.with_extension("part");
         let ok = std::process::Command::new("curl")
             .args(["-fL", "--progress-bar", "-o"])

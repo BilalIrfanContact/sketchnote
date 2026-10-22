@@ -43,7 +43,7 @@ pub fn run() -> Result<()> {
 
     let exe = std::env::current_exe().context("finding this binary")?;
     let new_exe = exe.with_file_name("sketchnote.new");
-    download(&url("sketchnote"), &new_exe)?;
+    download("the new sketchnote", &url("sketchnote"), &new_exe)?;
     fs::set_permissions(&new_exe, fs::Permissions::from_mode(0o755))?;
 
     // Staged and swapped beside the installed extension, so the renames stay on one disk.
@@ -52,7 +52,7 @@ pub fn run() -> Result<()> {
     let _ = fs::remove_dir_all(&new_ext);
     fs::create_dir_all(&new_ext)?;
     let tarball = new_ext.join("extension.tar.gz");
-    download(&url("sketchnote-extension.tar.gz"), &tarball)?;
+    download("the new extension", &url("sketchnote-extension.tar.gz"), &tarball)?;
     let unpacked = Command::new("tar").arg("-xzf").arg(&tarball).arg("-C").arg(&new_ext).status()?;
     fs::remove_file(&tarball)?;
     ensure!(unpacked.success(), "unpacking the extension failed");
@@ -104,8 +104,10 @@ fn latest_tag() -> Result<String> {
     Ok(release["tag_name"].as_str().context("GitHub's answer has no tag_name")?.to_string())
 }
 
-fn download(url: &str, to: &Path) -> Result<()> {
-    eprintln!("Downloading {url}");
+/// Downloads `url` with a progress bar, naming it `what` rather than printing the URL,
+/// which only shows up if the download fails.
+fn download(what: &str, url: &str, to: &Path) -> Result<()> {
+    eprintln!("Downloading {what}");
     let ok = Command::new("curl").args(["-fL", "--progress-bar", "-o"]).arg(to).arg(url).status()?.success();
     ensure!(ok, "downloading {url} failed");
     Ok(())
