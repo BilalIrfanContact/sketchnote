@@ -8,9 +8,9 @@ extension there, plays speech into a virtual microphone, and drives real keyboar
 input through Mutter's RemoteDesktop API:
 
   capture 1: Alt+Shift+S, two strokes, two clicks, a Shift-click pin, a stroke that is
-             undone with Ctrl+Z, then Alt+Shift+S to finish.
+             undone with Ctrl+Z while Shift is still held, then Alt+Shift+S to finish.
   capture 2: Alt+Shift+S, one stroke, click Finish in the pill.
-  capture 3: Alt+Shift+S, Esc before the recording has started, Alt+Shift+S again at
+  capture 3: Alt+Shift+S, Shift+Esc before the recording has started, Alt+Shift+S again at
              once, one stroke, Alt+Shift+S. The cancel must not clobber the new capture.
 
 Then it opens paste_target.py and checks that Ctrl+V pastes the newest capture's notes
@@ -131,7 +131,7 @@ class Input:
         self.button(True)
         self.button(False)
 
-    def drag(self, points):
+    def drag(self, points, release_shift=True):
         self.key('shift', True)
         time.sleep(0.05)
         self.move(*points[0])
@@ -139,7 +139,8 @@ class Input:
         for p in points[1:]:
             self.move(*p)
         self.button(False)
-        self.key('shift', False)
+        if release_shift:
+            self.key('shift', False)
 
 
 def ellipse(cx, cy, rx, ry, n=40):
@@ -214,9 +215,10 @@ def main():
         at(t0, 25.7)
         inp.drag(line(600, 700, 900, 705))
         at(t0, 27.5)
-        inp.drag(line(400, 300, 1400, 800))                  # mistake...
+        inp.drag(line(400, 300, 1400, 800), release_shift=False)  # mistake...
         time.sleep(0.3)
-        inp.combo('ctrl', 'z')                               # ...undone
+        inp.combo('ctrl', 'z')                               # ...undone, Shift still held
+        inp.key('shift', False)
         at(t0, 31)
         inp.combo('alt', 'shift', 's')
         print('capture 1 finished')
@@ -236,7 +238,7 @@ def main():
         # --- capture 3: cancel while the recording is still starting, start again ---
         inp.combo('alt', 'shift', 's')
         time.sleep(0.2)
-        inp.combo('esc')
+        inp.combo('shift', 'esc')                            # Esc works with Shift held too
         time.sleep(0.2)
         inp.combo('alt', 'shift', 's')
         time.sleep(2.5)

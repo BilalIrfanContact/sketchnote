@@ -692,8 +692,12 @@ export default class Sketchnote extends Extension {
             this._poll();
             return GLib.SOURCE_CONTINUE;
         });
+        // Shortcuts only match their exact modifiers, so the Shift variants cover Esc and
+        // Ctrl+Z pressed while Shift is still held after drawing.
         ui.keys = [this._grabKey('Escape', () => this._cancel()),
-            this._grabKey('<Control>z', () => this._undo())];
+            this._grabKey('<Shift>Escape', () => this._cancel()),
+            this._grabKey('<Control>z', () => this._undo()),
+            this._grabKey('<Control><Shift>z', () => this._undo())];
         this._indicator.setRecording(true);
         this._ui = ui;
     }
