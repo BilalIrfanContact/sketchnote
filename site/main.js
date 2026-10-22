@@ -17,22 +17,40 @@ function runDemo() {
   }
   let step = 0;
   let seconds = 0;
-  let ticker = null;
+  let next = null;      // timeout for the next step
+  let ticker = null;    // the pill's recording timer, steps 1-3
+  const tick = () => {
+    seconds += 1;
+    timer.textContent = `0:${String(seconds).padStart(2, "0")}`;
+  };
   const advance = () => {
     stage.dataset.step = String(step);
     if (step === 1) {
       seconds = 0;
       timer.textContent = "0:00";
-      ticker = setInterval(() => {
-        seconds += 1;
-        timer.textContent = `0:${String(seconds).padStart(2, "0")}`;
-      }, 1000);
+      ticker = setInterval(tick, 1000);
     }
-    if (step === 4) clearInterval(ticker);
-    const wait = STEPS[step];
+    if (step === 4) ticker = clearInterval(ticker);
+    next = setTimeout(advance, STEPS[step]);
     step = (step + 1) % STEPS.length;
-    setTimeout(advance, wait);
   };
+
+  // Pause freezes the current step; resume replays it from its start.
+  const pause = stage.querySelector(".demo-pause");
+  pause.addEventListener("click", () => {
+    const paused = stage.classList.toggle("paused");
+    pause.setAttribute("aria-pressed", String(paused));
+    pause.textContent = paused ? "Play" : "Pause";
+    if (paused) {
+      clearTimeout(next);
+      clearInterval(ticker);
+      step = (step + STEPS.length - 1) % STEPS.length;   // the step on screen
+    } else {
+      if (step >= 1 && step <= 3) ticker = setInterval(tick, 1000);
+      next = setTimeout(advance, STEPS[step]);
+      step = (step + 1) % STEPS.length;
+    }
+  });
   advance();
 }
 

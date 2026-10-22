@@ -128,7 +128,7 @@ section { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
 
 /* Demo stage. Everything inside is sized in container units so it scales like an image. */
 .stage {
-  margin: 0; container-type: inline-size;
+  position: relative; margin: 0; container-type: inline-size;
   border-radius: 14px; border: 1px solid var(--line);
   overflow: hidden;
   box-shadow: 0 30px 80px rgb(0 0 0 / 0.45);
@@ -206,6 +206,16 @@ section { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
 .stage[data-step="3"] .s1, .stage[data-step="3"] .s2 { stroke-dashoffset: 0; }
 /* Strokes fade a moment after drawing, as in the app; they're kept in the output. */
 .stage[data-step="4"] .s1, .stage[data-step="4"] .s2 { stroke-dashoffset: 0; opacity: 0; }
+
+/* Pause control for the looping demo (WCAG pause, stop, hide). */
+.demo-pause {
+  position: absolute; right: 12px; bottom: 12px; z-index: 4;
+  height: 28px; padding: 0 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgb(255 255 255 / 0.15); background: rgb(11 11 12 / 0.7);
+  color: var(--muted); font: 500 12px var(--sans);
+}
+.demo-pause:hover, .demo-pause:focus-visible { color: var(--text); border-color: rgb(255 255 255 / 0.35); }
+.stage.paused *, .stage.paused *::before, .stage.paused *::after { animation-play-state: paused !important; }
 
 /* Recording pill */
 .pill {
@@ -366,6 +376,7 @@ kbd {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .demo-pause { display: none; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
   .reveal { opacity: 1; transform: none; }
