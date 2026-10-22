@@ -91,16 +91,17 @@ function drawLogo(delayMs = 0) {
   const draw = pen.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }],
     { duration: DRAW_MS, delay: delayMs, easing: DRAW_EASE, fill: "both" });
   draw.finished.then(() => mark.classList.remove("drawing"), () => {});  // cancelled: a redraw took over
-  pencilSound(DRAW_MS / 1000, delayMs / 1000);
+  pencilSound((delayMs + DRAW_MS * 0.15) / 1000);     // as the pen picks up speed
 }
 
-// Pencil on paper: band-passed noise whose loudness follows the pen's speed (slow start,
-// quick middle, a flick at the end), with random grain so it doesn't sound like hiss.
-function pencilSound(seconds, delay) {
+// Pencil on paper: one quick swipe of band-passed noise, a fast rise and a fade, with random
+// grain so it doesn't sound like hiss.
+const SOUND_S = 0.35;
+function pencilSound(delay) {
   audio ??= new AudioContext();
   if (audio.state === "suspended") audio.resume().catch(() => {});
   const t0 = audio.currentTime + delay + 0.02;
-  const length = Math.ceil(audio.sampleRate * seconds);
+  const length = Math.ceil(audio.sampleRate * SOUND_S);
   const buffer = audio.createBuffer(1, length, audio.sampleRate);
   const data = buffer.getChannelData(0);
   for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
@@ -115,12 +116,12 @@ function pencilSound(seconds, delay) {
   const steps = 60;
   for (let i = 0; i <= steps; i++) {
     const p = i / steps;
-    const speed = Math.sin(Math.PI * p) ** 0.7;    // matches the ease-in-out of the draw
+    const level = p < 0.12 ? p / 0.12 : (1 - p) ** 1.6;   // fast attack, then fade
     const grain = 0.55 + 0.45 * Math.random();
-    gain.gain.linearRampToValueAtTime(0.32 * speed * grain, t0 + p * seconds);
+    gain.gain.linearRampToValueAtTime(0.32 * level * grain, t0 + p * SOUND_S);
   }
   noise.start(t0);
-  noise.stop(t0 + seconds + 0.05);
+  noise.stop(t0 + SOUND_S + 0.05);
 }
 
 if (mark) {
