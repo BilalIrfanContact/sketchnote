@@ -16,7 +16,7 @@ input through Mutter's RemoteDesktop API:
 Then it opens paste_target.py and checks that Ctrl+V pastes the newest capture's notes
 and contact sheet, that Alt+Shift+V does too, and that Ctrl+V is normal after a copy.
 
-Then waits for the three bundles and checks their contents. Needs install.sh to have
+Then waits for the three bundles and checks their contents. Needs build-from-source.sh to have
 linked the extension and the D-Bus service file.
 """
 import json

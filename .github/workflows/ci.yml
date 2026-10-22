@@ -9,7 +9,7 @@ on:
 
 jobs:
   rust:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -21,12 +21,12 @@ jobs:
       - run: cargo test --release
 
   scripts:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: Extension parses
         run: cp extension/sketchnote@local/extension.js /tmp/extension.mjs && node --check /tmp/extension.mjs
-      - name: install.sh parses
-        run: bash -n install.sh
+      - name: Install scripts parse
+        run: bash -n install.sh && bash -n build-from-source.sh
       - name: Test scripts compile
         run: python3 -m py_compile tests/*.py
