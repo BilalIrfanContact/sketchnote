@@ -77,9 +77,10 @@ cat > "$DBUS_DIR/org.sketchnote.Service.service" <<EOF
 Name=org.sketchnote.Service
 Exec=$BIN service
 EOF
-# A service still running an older binary is stopped, unless it's recording; D-Bus starts
-# the new one on demand.
-pgrep -x pw-record >/dev/null || pkill -f "/sketchnote service$" || true
+# A service still running an older binary quits once nothing is recording or building;
+# D-Bus then starts the new one on demand.
+gdbus call --session --dest org.sketchnote.Service --object-path /org/sketchnote/Service \
+    --method org.sketchnote.Service.QuitWhenIdle >/dev/null 2>&1 || true
 
 echo "== Enabling the extension"
 gnome-extensions enable "$UUID" 2>/dev/null || {

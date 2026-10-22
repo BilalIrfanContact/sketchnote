@@ -13,7 +13,7 @@ use crate::config::{self, Transcriber};
 use crate::media::Mic;
 use crate::{key, transcribe};
 
-const UUID: &str = "sketchnote@local";
+pub const UUID: &str = "sketchnote@local";
 
 pub fn run() -> Result<()> {
     println!("== GNOME Shell extension");
