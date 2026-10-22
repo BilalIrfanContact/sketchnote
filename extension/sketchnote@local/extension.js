@@ -1,18 +1,18 @@
-// Sketchnote: record the screen while you talk, hold Space to draw, click to mark.
+// Sketchnote: record the screen while you talk, hold Shift to draw, click to mark.
 //
 // Alt+Shift+S starts a capture (or finishes the running one). The screen is recorded
 // with GNOME Shell's own Screencast service (no portal prompt; only the Shell may call
 // it, which is why recording lives here). The microphone and everything after Finish
 // live in the Rust service (org.sketchnote.Service) on the session bus.
 //
-// While capturing:  hold Space + drag  = red stroke (fades on screen, kept in output)
-//                   Space + click      = pin (numbered in the notes)
+// While capturing:  hold Shift + drag  = red stroke (fades on screen, kept in output)
+//                   Shift + click      = pin (numbered in the notes)
 //                   plain click        = logged as a click event
 //                   Ctrl+Z = undo last stroke/pin,  Esc = cancel
 //
 // When a capture is ready its notes go on the clipboard, and the next Ctrl+V pastes the
 // notes and then the contact sheet (two ordinary pastes, so any app accepts them).
-// Alt+Shift+V does the same for the latest capture at any time (like Scrawl's ⌥⇧V).
+// Alt+Shift+V does the same for the latest capture at any time.
 
 import Cairo from 'cairo';
 import Clutter from 'gi://Clutter';
@@ -38,7 +38,7 @@ const TEXT_MIME = 'text/plain;charset=utf-8';
 const CAPTURES = GLib.build_filenamev([GLib.get_user_data_dir(), 'sketchnote', 'captures']);
 const FADE_HOLD = 0.5;         // seconds a finished stroke stays fully visible
 const FADE_TIME = 1.0;         // ...then fades out over this long
-const PIN_MAX_MOVE = 5;        // a Space+press that moves less than this is a pin
+const PIN_MAX_MOVE = 5;        // a Shift+press that moves less than this is a pin
 const POLL_MS = 10;
 const GLOW_WIDTH = 28;         // px of red fade along each screen edge
 const STATUS_MS = 6000;        // a "Ready" or "Failed" status hides itself after this
@@ -670,7 +670,7 @@ export default class Sketchnote extends Extension {
         const ui = {glows: []};
         ui.ink = new Ink();
         Main.uiGroup.add_child(ui.ink.actor);
-        // Takes pointer input only while Space is held, so normal clicks reach apps.
+        // Takes input only while Shift is held, so normal clicks reach apps.
         ui.catcher = new St.Widget({reactive: false, x: 0, y: 0,
             width: global.stage.width, height: global.stage.height});
         ui.catcher.connect('event', (_a, event) => this._onDrawEvent(event));
@@ -692,9 +692,12 @@ export default class Sketchnote extends Extension {
             this._poll();
             return GLib.SOURCE_CONTINUE;
         });
-        ui.keys = [this._grabKey('space', () => this._holdSpace()),
-            this._grabKey('Escape', () => this._cancel()),
-            this._grabKey('<Control>z', () => this._undo())];
+        // Shortcuts only match their exact modifiers, so the Shift variants cover Esc and
+        // Ctrl+Z pressed while Shift is still held after drawing.
+        ui.keys = [this._grabKey('Escape', () => this._cancel()),
+            this._grabKey('<Shift>Escape', () => this._cancel()),
+            this._grabKey('<Control>z', () => this._undo()),
+            this._grabKey('<Control><Shift>z', () => this._undo())];
         this._indicator.setRecording(true);
         this._ui = ui;
     }
@@ -746,7 +749,6 @@ export default class Sketchnote extends Extension {
             return;
         this._ui = null;
         this._stroke = null;
-        this._spaceHeld = false;
         this._releaseGrab();
         for (const id of [ui.clock, ui.poll, ui.meter, ui.micCheck])
             if (id)
@@ -761,27 +763,22 @@ export default class Sketchnote extends Extension {
 
     // --- input ---------------------------------------------------------------
 
-    // Space is a plain key, so there is no modifier bit to poll: its press arrives as an
-    // accelerator, and grabbing the stage right away routes its release to the catcher.
-    _holdSpace() {
-        this._spaceHeld = true;
-        this._poll();
-    }
-
-    // Switches the catcher on/off while Space is held and logs plain clicks anywhere.
+    // Switches the catcher on/off while Shift is held and logs plain clicks anywhere.
+    // A stage grab routes the pointer to the catcher immediately; just flipping `reactive`
+    // would only take effect after the next repaint, and a quick Shift+click would miss.
+    // The grab also holds keys, so text typed with Shift doesn't reach apps meanwhile.
     _poll() {
         const [x, y, mods] = global.get_pointer();
         const down = (mods & Clutter.ModifierType.BUTTON1_MASK) !== 0;
-        // A stage grab routes the pointer to the catcher immediately; just flipping
-        // `reactive` would only take effect after the next repaint.
-        const draw = this._spaceHeld || this._stroke !== null;
+        const shift = (mods & Clutter.ModifierType.SHIFT_MASK) !== 0;
+        const draw = shift || this._stroke !== null;
         if (draw && !this._grab) {
             this._ui.catcher.reactive = true;
             this._grab = global.stage.grab(this._ui.catcher);
         } else if (!draw && this._grab) {
             this._releaseGrab();
         }
-        if (down && !this._wasDown && !this._spaceHeld && !this._stroke &&
+        if (down && !this._wasDown && !shift && !this._stroke &&
             !inside(this._ui.pill.actor, x, y) && !inside(Main.panel, x, y))
             this._addEvent({type: 'click', x, y});
         this._wasDown = down;
@@ -789,12 +786,8 @@ export default class Sketchnote extends Extension {
 
     _onDrawEvent(event) {
         const type = event.type();
-        if (type === Clutter.EventType.KEY_RELEASE && event.get_key_symbol() === Clutter.KEY_space) {
-            this._spaceHeld = false;
-            return Clutter.EVENT_STOP;
-        }
         if (type === Clutter.EventType.KEY_PRESS || type === Clutter.EventType.KEY_RELEASE)
-            return Clutter.EVENT_STOP;      // e.g. Space autorepeat: keep it from the app
+            return Clutter.EVENT_STOP;      // keys typed with Shift held: keep them from apps
         const [x, y] = event.get_coords();
         if (type === Clutter.EventType.BUTTON_PRESS && event.get_button() === 1) {
             this._stroke = {points: [[x, y]], doneAt: null, t: this._elapsed()};
@@ -821,7 +814,7 @@ export default class Sketchnote extends Extension {
         const moved = Math.max(...item.points.map(([x, y]) => Math.hypot(x - x0, y - y0)));
         item.doneAt = now() / 1e6;
         if (moved < PIN_MAX_MOVE) {
-            // Space+click: turn it into a pin.
+            // Shift+click: turn it into a pin.
             item.points = null;
             Object.assign(item, {x: x0, y: y0});
             item.event = this._addEvent({type: 'pin', x: x0, y: y0, t: item.t});

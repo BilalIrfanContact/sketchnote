@@ -7,10 +7,10 @@ Starts `gnome-shell --headless` on its own session bus with its own dconf, enabl
 extension there, plays speech into a virtual microphone, and drives real keyboard/pointer
 input through Mutter's RemoteDesktop API:
 
-  capture 1: Alt+Shift+S, two strokes, two clicks, a Space-click pin, a stroke that is
-             undone with Ctrl+Z, then Alt+Shift+S to finish.
+  capture 1: Alt+Shift+S, two strokes, two clicks, a Shift-click pin, a stroke that is
+             undone with Ctrl+Z while Shift is still held, then Alt+Shift+S to finish.
   capture 2: Alt+Shift+S, one stroke, click Finish in the pill.
-  capture 3: Alt+Shift+S, Esc before the recording has started, Alt+Shift+S again at
+  capture 3: Alt+Shift+S, Shift+Esc before the recording has started, Alt+Shift+S again at
              once, one stroke, Alt+Shift+S. The cancel must not clobber the new capture.
 
 Then it opens paste_target.py and checks that Ctrl+V pastes the newest capture's notes
@@ -42,7 +42,7 @@ DISPLAY = 'sketchnote-e2e'
 bus = Gio.bus_get_sync(Gio.BusType.SESSION)
 
 KEY = {'shift': 0xffe1, 'alt': 0xffe9, 'ctrl': 0xffe3, 's': 0x73, 'z': 0x7a, 'esc': 0xff1b,
-       'space': 0x20, 'v': 0x76, 'c': 0x63}
+       'v': 0x76, 'c': 0x63}
 BTN_LEFT = 0x110
 
 
@@ -131,17 +131,16 @@ class Input:
         self.button(True)
         self.button(False)
 
-    def drag(self, points, space=True):
-        if space:
-            self.key('space', True)
-            time.sleep(0.05)
+    def drag(self, points, release_shift=True):
+        self.key('shift', True)
+        time.sleep(0.05)
         self.move(*points[0])
         self.button(True)
         for p in points[1:]:
             self.move(*p)
         self.button(False)
-        if space:
-            self.key('space', False)
+        if release_shift:
+            self.key('shift', False)
 
 
 def ellipse(cx, cy, rx, ry, n=40):
@@ -176,7 +175,7 @@ def main():
                                        '--wayland-display', DISPLAY], stdout=log, stderr=log))
         wait_for(lambda: call('org.gnome.Shell', '/org/gnome/Shell',
                               'org.gnome.Shell.Extensions', 'GetExtensionInfo',
-                              GLib.Variant('(s)', ('sketchnote@local',)))[0]['state'] == 1,
+                              GLib.Variant('(s)', ('sketchnote@local',)))[0].get('state') == 1,
                  'extension to be active')
         print('shell up, extension active')
 
@@ -212,13 +211,14 @@ def main():
         at(t0, 14.4)
         inp.click(860, 560)
         at(t0, 21.6)
-        inp.drag([(1100, 450), (1101, 451)])                 # Space+click = pin
+        inp.drag([(1100, 450), (1101, 451)])                 # Shift+click = pin
         at(t0, 25.7)
         inp.drag(line(600, 700, 900, 705))
         at(t0, 27.5)
-        inp.drag(line(400, 300, 1400, 800))                  # mistake...
+        inp.drag(line(400, 300, 1400, 800), release_shift=False)  # mistake...
         time.sleep(0.3)
-        inp.combo('ctrl', 'z')                               # ...undone
+        inp.combo('ctrl', 'z')                               # ...undone, Shift still held
+        inp.key('shift', False)
         at(t0, 31)
         inp.combo('alt', 'shift', 's')
         print('capture 1 finished')
@@ -238,7 +238,7 @@ def main():
         # --- capture 3: cancel while the recording is still starting, start again ---
         inp.combo('alt', 'shift', 's')
         time.sleep(0.2)
-        inp.combo('esc')
+        inp.combo('shift', 'esc')                            # Esc works with Shift held too
         time.sleep(0.2)
         inp.combo('alt', 'shift', 's')
         time.sleep(2.5)
