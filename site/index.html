@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sketchnote: circle the bug, say what's wrong, paste it to your agent</title>
+  <meta name="description" content="Sketchnote for GNOME records your screen and voice while you draw on it, then pastes timestamped notes and annotated frames into your coding agent with one Ctrl+V.">
+  <meta name="theme-color" content="#0b0b0c">
+  <meta name="color-scheme" content="dark">
+  <meta property="og:title" content="Sketchnote: show your coding agent the problem">
+  <meta property="og:description" content="Talk, draw on your screen, and paste the notes and annotated frames into your agent. For GNOME on Linux.">
+  <meta property="og:type" content="website">
+  <link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="Sketchnote home">
+      <img class="brand-mark" src="logo.svg" alt="" width="34" height="24">
+      Sketchnote
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#privacy">Privacy</a>
+      <a href="https://github.com/BilalIrfanContact/sketchnote">GitHub</a>
+    </nav>
+    <a class="btn btn-primary btn-small" href="#install">Install</a>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <!-- The logo draws itself on load: a red pen line traces the loop, then the exact logo
+           shape takes its place. Clicking it draws it again, with a pencil sound (main.js). -->
+      <button class="hero-mark" type="button" aria-label="Draw the Sketchnote logo again">
+        <svg viewBox="0 0 365 252" aria-hidden="true">
+          <path class="pen" pathLength="1" d="M228.2 33.2 L231.2 33.2 L234.6 32.8 L238.2 32.1 L242.0 31.3 L246.0 30.6 L250.2 29.9 L254.4 29.3 L258.7 28.9 L263.0 28.7 L267.5 28.6 L272.2 28.5 L276.8 28.7 L281.5 29.0 L286.1 29.7 L290.6 30.6 L295.3 31.6 L300.0 32.7 L304.6 34.2 L309.2 35.8 L313.8 37.6 L318.0 39.8 L322.0 42.3 L325.9 44.9 L329.8 47.7 L333.3 50.8 L336.4 54.2 L339.2 57.8 L341.8 61.6 L343.8 65.6 L345.3 69.9 L346.4 74.2 L347.2 78.7 L347.5 83.2 L347.3 87.8 L346.6 92.4 L345.4 97.1 L343.9 101.7 L342.3 106.2 L340.4 110.6 L338.3 114.9 L336.0 119.0 L333.6 123.1 L331.0 127.0 L328.1 130.8 L325.1 134.4 L322.3 137.9 L319.3 141.3 L316.6 144.5 L313.8 147.6 L310.8 150.6 L308.0 153.4 L305.2 156.2 L302.2 158.8 L299.3 161.3 L296.5 163.7 L293.8 166.0 L291.0 168.3 L288.3 170.4 L285.6 172.5 L282.9 174.5 L280.2 176.3 L277.7 178.2 L275.2 180.0 L272.7 181.8 L270.3 183.5 L267.9 185.2 L265.3 186.7 L262.9 188.2 L260.6 189.7 L258.3 191.2 L255.8 192.4 L253.4 193.8 L251.2 195.1 L248.9 196.4 L246.6 197.7 L244.4 198.9 L242.1 200.1 L239.9 201.2 L237.6 202.3 L235.4 203.4 L233.2 204.5 L231.0 205.6 L228.8 206.7 L226.6 207.8 L224.4 208.7 L222.1 209.6 L219.9 210.6 L217.6 211.5 L215.4 212.4 L213.2 213.4 L210.9 214.4 L208.6 215.2 L206.3 216.0 L204.0 216.9 L201.7 217.9 L199.4 218.9 L197.0 219.7 L194.6 220.5 L192.2 221.4 L189.7 222.2 L187.2 223.0 L184.7 223.8 L182.1 224.7 L179.5 225.5 L176.8 226.3 L174.1 227.2 L171.3 228.0 L168.5 228.9 L165.6 229.7 L162.7 230.2 L159.6 231.0 L156.5 232.0 L153.3 232.9 L150.0 233.5 L146.7 234.1 L143.3 234.8 L139.8 235.5 L136.2 236.0 L132.5 236.5 L128.6 237.2 L124.5 238.0 L120.5 238.4 L116.4 238.7 L112.2 239.0 L107.8 239.3 L103.4 239.4 L98.8 239.5 L94.1 239.5 L89.3 239.3 L84.5 239.0 L79.5 238.6 L74.6 238.0 L69.7 237.1 L64.8 235.9 L59.8 234.7 L55.0 233.1 L50.5 231.1 L46.1 228.8 L41.9 226.4 L37.8 223.6 L34.1 220.6 L30.9 217.1 L27.9 213.5 L25.3 209.6 L23.2 205.4 L21.6 201.0 L20.5 196.4 L19.8 191.7 L19.5 186.9 L19.5 182.1 L20.0 177.2 L20.9 172.3 L22.2 167.4 L23.8 162.5 L25.6 157.8 L27.6 153.2 L29.7 148.7 L32.0 144.3 L34.7 140.1 L37.3 136.0 L39.7 132.0 L42.3 128.2 L45.0 124.6 L47.9 121.1 L50.8 117.7 L53.7 114.5 L56.6 111.4 L59.4 108.4 L62.2 105.6 L64.9 102.8 L67.6 100.2 L70.2 97.6 L72.8 95.2 L75.5 92.9 L78.2 90.7 L80.6 88.5 L83.1 86.4 L85.7 84.5 L88.0 82.5 L90.4 80.6 L92.8 78.8 L95.1 77.0 L97.3 75.3 L99.6 73.7 L101.9 72.1 L104.1 70.5 L106.3 69.0 L108.5 67.6 L110.7 66.1 L112.8 64.8 L115.0 63.4 L117.1 62.1 L119.2 60.8 L121.4 59.7 L123.5 58.5 L125.4 57.1 L127.4 55.9 L129.5 54.8 L131.6 53.7 L133.7 52.6 L135.7 51.5 L137.7 50.4 L139.7 49.3 L141.8 48.2 L143.9 47.3 L146.0 46.3 L148.0 45.3 L150.0 44.1 L152.1 43.0 L154.2 42.2 L156.4 41.3 L158.5 40.3 L160.7 39.5 L162.9 38.6 L165.1 37.6 L167.3 36.6 L169.5 35.5 L171.8 34.3 L174.1 33.4 L176.5 32.7 L178.9 31.8 L181.4 30.8 L183.8 29.9 L186.4 28.9 L189.0 27.9 L191.7 27.0 L194.4 26.0 L197.2 25.0 L200.0 24.0 L203.0 23.1 L206.0 22.2 L209.1 21.3 L212.3 20.3 L215.5 19.4 L218.9 18.6 L222.4 17.7 L226.0 16.6 L229.8 15.7 L233.6 14.8 L237.5 14.1 L241.5 13.5 L245.6 12.9 L250.0 12.2 L254.4 11.6 L259.0 11.0 L263.7 10.6 L268.5 10.3 L273.4 10.1 L278.5 10.0 L283.7 10.0 L288.9 10.3 L293.5 11.4 L297.7 13.1"/>
+          <path class="shape" fill="#ff3030" d="M 257.8 175.8C 280.7 160.8 301.5 144 318 122.5C 323.9 114.9 329 106.5 332.9 97.7C 340.6 80.4 334.7 61.8 319 51.1C 306.1 42.3 291.5 38.7 276.3 36.8C 261.2 35.1 246.3 36.6 231.5 39.3C 228 39.9 224.9 40 223.9 36.1C 222.8 32.2 225 29.5 228.5 28.4C 249.2 21.7 270.1 17.9 292 21.6C 307.9 24.4 322.7 29.7 335.2 39.9C 357.9 58.3 364 86.9 351.4 114.9C 341.6 136.6 326.1 153.9 308.5 169.5C 272.6 201.3 230.4 221.4 185.3 235.9C 154.6 245.7 123.3 251.6 90.9 249.9C 76.4 249.2 62.2 246.8 48.6 241.1C 15.5 227.3 0.7 195.8 11.4 161.5C 19.2 136.6 34.3 116.5 52.3 98.3C 88.7 61.3 132.8 36.8 181.1 19.1C 204.3 10.6 227.9 3.5 252.6 1.6C 265.7 0.6 278.9 1.6 292 1.8C 293.3 1.9 294.7 2.3 295.8 2.9C 299.1 4.7 301.7 7.2 300.7 11.3C 299.8 15.2 296.8 16.9 292.9 16.8C 274.7 16.3 256.9 18.9 239.4 23.1C 181.6 37.1 128.6 61.2 83.3 100.5C 63.8 117.4 47 136.7 35.8 160.3C 31.9 168.7 29.5 177.4 29.5 186.8C 29.6 201.9 36.7 212.5 49.4 219.7C 61.1 226.3 74.1 228.4 87.4 228.9C 116.3 229.9 143.9 223.5 171.3 215.1C 201.7 205.7 230.7 193.2 257.8 175.8 z"/>
+        </svg>
+      </button>
+      <div class="hero-copy">
+        <p class="eyebrow">For GNOME on Linux</p>
+        <h1>Circle the bug.<br>Say what's wrong.</h1>
+        <p class="lede">Talk and draw on your screen. One Ctrl+V gives your coding agent the notes and the annotated frames.</p>
+        <div class="hero-actions">
+          <div class="command" data-copy>
+            <code><span class="prompt">$</span> <span class="cmd-text">curl -fsSL https://get.sketchnote.workers.dev/install | bash</span></code>
+            <button class="copy" type="button" aria-label="Copy install command">Copy</button>
+          </div>
+          <a class="btn btn-ghost" href="https://github.com/BilalIrfanContact/sketchnote">View on GitHub</a>
+        </div>
+      </div>
+
+      <!-- Animated walkthrough of one capture. main.js drives it by setting data-step on .stage. -->
+      <figure class="stage" data-step="0" aria-label="Animation: a capture is recorded, two marks are drawn while talking, and the notes and contact sheet are pasted into an agent.">
+        <div class="desktop">
+          <div class="topbar"><span>Activities</span><span class="clock">Thu 10:42</span><span class="tray"></span></div>
+
+          <div class="pill" aria-hidden="true">
+            <span class="dot"></span>
+            <span class="pill-label"><span class="timer">0:00</span><span class="meter"><i></i></span></span>
+            <span class="pill-state">Transcribing…</span>
+            <span class="pill-ready">Ready · Ctrl+V to paste</span>
+          </div>
+
+          <div class="window app">
+            <div class="titlebar"><span>Settings</span><i></i></div>
+            <!-- Laid out on the same 400x260 grid as the ink SVG, so strokes land on their targets. -->
+            <h3>Notifications</h3>
+            <div class="row r1"><span>Show previews on the lock scr</span><b class="toggle on"></b></div>
+            <div class="row r2"><span>Do not disturb</span><b class="toggle"></b></div>
+            <div class="row r3"><span>Sound</span><b class="toggle on"></b></div>
+            <span class="btn-fake cancel">Cancel</span>
+            <span class="btn-fake save">Save</span>
+            <svg class="ink" viewBox="0 0 400 260" preserveAspectRatio="none" aria-hidden="true">
+              <path class="stroke s1" pathLength="1" d="M300 202c6-14 44-18 66-10s24 22 6 30-56 8-70 0-10-18 4-24"/>
+              <path class="stroke s2" pathLength="1" d="M22 98c52 3 118 3 176 -1"/>
+            </svg>
+          </div>
+
+          <div class="caption" aria-hidden="true"><span class="c1">“The save button sits way off to the right.”</span><span class="c2">“And this label is cut off.”</span></div>
+
+          <div class="window agent">
+            <div class="titlebar"><span>Terminal</span><i></i></div>
+            <div class="agent-body">
+              <p class="agent-line">&gt; <span class="paste-text"><span>- #1 (0:03) “The save button sits way off to the right.”</span><span>- #2 (0:06) “And this label is cut off.”</span></span><span class="cursor"></span></p>
+              <div class="sheet">
+                <div class="crop"><em>1</em><span class="mini-save"></span><svg viewBox="0 0 100 60" preserveAspectRatio="none"><path pathLength="1" d="M58 40c-4-12 14-16 26-14s16 10 8 16-26 6-32 0-2-10 4-12"/></svg></div>
+                <div class="crop"><em>2</em><span class="mini-label"></span><svg viewBox="0 0 100 60" preserveAspectRatio="none"><path pathLength="1" d="M10 38c26 2 54 2 80 -1"/></svg></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="demo-pause" type="button" aria-pressed="false">Pause</button>
+      </figure>
+    </section>
+
+    <section class="how" id="how">
+      <h2>You talk. It takes the notes.</h2>
+      <ol class="steps">
+        <li>
+          <div class="step-key"><kbd>Alt</kbd><kbd>Shift</kbd><kbd>S</kbd></div>
+          <div>
+            <h3>Talk and draw</h3>
+            <p>Start a capture and explain the problem out loud. Hold Shift and drag to circle what you mean, or just click on it.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-key"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 48 24"><path d="M3 15c6-10 10 6 16-3s8 7 13-2 8 4 13-1"/></svg></span></div>
+          <div>
+            <h3>Every sentence lands on its mark</h3>
+            <p>Whisper transcribes your voice on your own CPU with word timings, so each sentence sits under the mark you drew while saying it. Frames are cropped to where you worked.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-key"><kbd>Ctrl</kbd><kbd>V</kbd></div>
+          <div>
+            <h3>One paste, text and image</h3>
+            <p>In your agent's input, a single Ctrl+V pastes the numbered notes and then a contact sheet of the frames. It works in any app that takes pasted text and images.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="output">
+      <div class="output-copy">
+        <h2>Plain notes an agent can act on</h2>
+        <p>Timestamped, numbered to match the frames, and short enough to read at a glance. The full bundle, with the recording and word timings, stays in a folder if the agent needs more.</p>
+      </div>
+      <pre class="summary"><code><span class="k">- #1</span> <span class="t">(0:04)</span> “This footer has too much text, let's cut it down.”
+<span class="k">-</span> <span class="t">(0:08)</span> <span class="tag">[clicked]</span>
+<span class="k">- #2</span> <span class="t">(0:10)</span> “And the model name here is out of date.”
+<span class="k">- #3</span> <span class="t">(0:11)</span> <span class="tag">[clicked]</span> “This button should open the settings instead.”</code></pre>
+    </section>
+
+    <section class="controls" aria-labelledby="controls-title">
+      <h2 id="controls-title">Seven keys, nothing to configure</h2>
+      <dl class="keys">
+        <div><dt><kbd>Alt</kbd><kbd>Shift</kbd><kbd>S</kbd></dt><dd>Start or finish a capture</dd></div>
+        <div><dt><kbd>Shift</kbd> + drag</dt><dd>Draw</dd></div>
+        <div><dt><kbd>Shift</kbd> + click</dt><dd>Drop a numbered pin</dd></div>
+        <div><dt><kbd>Ctrl</kbd><kbd>Z</kbd></dt><dd>Undo the last mark</dd></div>
+        <div><dt><kbd>Esc</kbd></dt><dd>Cancel and discard</dd></div>
+        <div><dt><kbd>Ctrl</kbd><kbd>V</kbd></dt><dd>Paste notes and frames</dd></div>
+        <div><dt><kbd>Alt</kbd><kbd>Shift</kbd><kbd>V</kbd></dt><dd>Paste the latest capture again</dd></div>
+      </dl>
+    </section>
+
+    <section class="privacy" id="privacy">
+      <p class="statement">Your screen and voice stay on your machine.</p>
+      <div class="facts">
+        <p><strong>Local by default.</strong> Transcription runs on your CPU. Nothing is uploaded; only what you paste leaves, to wherever you paste it.</p>
+        <p><strong>Gone after a day.</strong> A capture is deleted once it has sat unchanged for 24 hours, checked hourly while Sketchnote runs. Cancelling deletes one straight away.</p>
+        <p><strong>API if you want it.</strong> Point it at Groq, or any OpenAI-compatible server whose model returns word timings, for faster notes. Only the mic audio is sent, never the screen.</p>
+      </div>
+    </section>
+
+    <section class="install" id="install">
+      <h2>Install</h2>
+      <p class="req">Needs GNOME 50 on Wayland, an x86_64 CPU from the last decade, and <code>ffmpeg</code> and <code>pw-record</code>. The installer checks all of it and tells you what's missing.</p>
+      <ol class="install-steps">
+        <li>
+          <p>Install the binary and the GNOME extension into <code>~/.local</code>:</p>
+          <div class="command" data-copy>
+            <code><span class="prompt">$</span> <span class="cmd-text">curl -fsSL https://get.sketchnote.workers.dev/install | bash</span></code>
+            <button class="copy" type="button" aria-label="Copy install command">Copy</button>
+          </div>
+        </li>
+        <li><p>Log out and back in once, so GNOME loads the extension.</p></li>
+        <li>
+          <p>Download the speech model, check your mic, and choose local or API:</p>
+          <div class="command" data-copy>
+            <code><span class="prompt">$</span> <span class="cmd-text">sketchnote setup</span></code>
+            <button class="copy" type="button" aria-label="Copy setup command">Copy</button>
+          </div>
+        </li>
+      </ol>
+      <p class="update">Later, <code>sketchnote update</code> fetches the newest release and keeps your models.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>Sketchnote</span>
+    <a class="footer-github" href="https://github.com/BilalIrfanContact/sketchnote">GitHub</a>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install the latest Sketchnote release for the current user:
 #
-#     curl -fsSL https://github.com/BilalIrfanContact/sketchnote/releases/latest/download/install.sh | bash
+#     curl -fsSL https://get.sketchnote.workers.dev/install | bash
 #
 # Needs GNOME 50 on x86_64 with AVX2, FMA and F16C, plus ffmpeg and pw-record. Puts the
 # binary in ~/.local/bin and the extension in ~/.local/share/gnome-shell/extensions, and

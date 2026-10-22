@@ -1,0 +1,10 @@
+// Cloudflare Workers static site for the landing page: serves site/ at
+// https://get.sketchnote.workers.dev, where /install redirects to the latest installer
+// (site/_redirects). Deploy with `npx wrangler deploy`.
+{
+  "name": "get",
+  "compatibility_date": "2026-10-19",
+  "assets": {
+    "directory": "site"
+  }
+}

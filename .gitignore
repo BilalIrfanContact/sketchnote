@@ -3,3 +3,6 @@ TESTING.md
 /target/
 AGENTS.md
 /docs/build-journal/
+
+# Wrangler cache (landing page deploys)
+.wrangler
