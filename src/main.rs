@@ -5,6 +5,7 @@
 //!     sketchnote transcribe WAV    print a 16 kHz mono WAV's words with timestamps, as JSON
 //!     sketchnote download-model    download the speech model set in config.toml, if missing
 //!     sketchnote set-key           store the API key for the [api] url in config.toml
+//!     sketchnote setup             first-run checks and choices, after install.sh
 
 mod api;
 mod bundle;
@@ -16,6 +17,7 @@ mod key;
 mod media;
 mod notes;
 mod service;
+mod setup;
 mod transcribe;
 
 use std::path::PathBuf;
@@ -93,9 +95,10 @@ fn main() -> ExitCode {
             Ok(())
         }),
         ["download-model"] => configured_model().and_then(|model| transcribe::download(&model)),
+        ["setup"] => setup::run(),
         ["set-key"] => config::load().and_then(|config| key::set_interactively(&config.api.url)),
         _ => {
-            eprintln!("usage: sketchnote service | latest | transcribe WAV | download-model | set-key");
+            eprintln!("usage: sketchnote service | latest | transcribe WAV | download-model | set-key | setup");
             return ExitCode::from(2);
         }
     };

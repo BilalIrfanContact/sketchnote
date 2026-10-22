@@ -159,7 +159,7 @@ fn explain(status: u16, body: &str, host: &str, api: &Api) -> String {
 }
 
 /// `api.groq.com` from `https://api.groq.com/openai/v1`.
-fn host(url: &str) -> String {
+pub fn host(url: &str) -> String {
     let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
     rest.split('/').next().unwrap_or(rest).to_string()
 }

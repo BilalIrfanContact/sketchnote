@@ -38,13 +38,15 @@ pub fn set_interactively(url: &str) -> Result<()> {
     std::io::stdout().flush()?;
     let key = without_echo(|| {
         let mut line = String::new();
-        std::io::stdin().lock().read_line(&mut line).map(|_| line)
-    })?;
+        std::io::stdin().lock().read_line(&mut line).map(|n| (n > 0).then_some(line))
+    })?
+    .ok_or_else(|| anyhow::anyhow!("No key entered (the input ended). Run this in a terminal."))?;
     println!();
     let entry = entry(url)?;
     match key.trim() {
         "" => match entry.delete_credential() {
-            Ok(()) | Err(Error::NoEntry) => println!("Removed the key for {url}."),
+            Ok(()) => println!("Removed the key for {url}."),
+            Err(Error::NoEntry) => println!("No key saved for {url}; run `sketchnote set-key` to add one."),
             Err(e) => return Err(e.into()),
         },
         key => {

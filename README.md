@@ -14,7 +14,7 @@ curl -fsSL https://github.com/BilalIrfanContact/sketchnote/releases/latest/downl
 
 The installer checks the requirements above and says exactly what's missing. It puts the `sketchnote` binary in `~/.local/bin`, the GNOME Shell extension in `~/.local/share/gnome-shell/extensions/`, and a D-Bus activation file so the service starts on demand. Nothing needs Rust or a compiler. It is safe to re-run, which also updates to the latest release.
 
-Then **log out and back in once**: GNOME on Wayland only discovers new extensions at login.
+Then run `sketchnote setup`. It downloads the speech model (Whisper `small`, 264 MB) and a voice detector, checks your mic, asks whether to transcribe on your computer or through an API (and takes the key), and says what gets recorded. It's safe to re-run. Then **log out and back in once**: GNOME on Wayland only discovers new extensions at login.
 
 ### Building from source
 
