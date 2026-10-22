@@ -1,48 +1,116 @@
-<img src="site/logo.svg" alt="" width="72">
+<div align="center">
+
+<img src="site/logo.svg" alt="" width="84">
 
 # Sketchnote
 
-Show a coding agent the problem: press a hotkey, talk, click and draw on your screen,
-then paste the result into your agent.
+**Show your coding agent the problem.**<br>
+Talk, draw on your screen, and paste timestamped notes with annotated frames into any agent with one Ctrl+V.
 
-**Requires GNOME 50** (Wayland) on an x86_64 CPU with AVX2, FMA and F16C (most since about 2015), plus `ffmpeg` and PipeWire's `pw-record`.
+[Website](https://get.sketchnote.workers.dev) · [Install](#install) · [How it works](#how-it-works)
+
+[![CI](https://github.com/BilalIrfanContact/sketchnote/actions/workflows/ci.yml/badge.svg)](https://github.com/BilalIrfanContact/sketchnote/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/BilalIrfanContact/sketchnote?color=ff3030)](https://github.com/BilalIrfanContact/sketchnote/releases/latest)
+![GNOME 50](https://img.shields.io/badge/GNOME-50%20·%20Wayland-4a86cf)
+
+<img src="docs/images/anatomy-light.png" alt="An isometric drawing of Sketchnote as a film studio: the GNOME extension records and draws on set, the Rust service transcribes and edits in the back room, and a delivery truck installs it." width="900">
+
+</div>
+
+Describing a UI bug in words is slow and lossy. With Sketchnote you press **Alt+Shift+S**, explain the problem out loud, and circle what you mean while you talk. When you finish, it transcribes your voice, ties each sentence to the mark you drew while saying it, and crops a keyframe around every mark. One Ctrl+V pastes the numbered notes, then a contact sheet of the frames, into Claude Code, Codex, a chat box, or anything else that accepts text and images.
+
+It's a native GNOME Shell extension with a Rust service behind it. Transcription runs locally by default, so nothing leaves your machine unless you paste it.
 
 ## Install
 
+Requires **GNOME 50** on Wayland, an x86_64 CPU with AVX2, FMA and F16C (most since about 2015), and `ffmpeg` and `pw-record`.
+
 ```sh
 curl -fsSL https://get.sketchnote.workers.dev/install | bash
+sketchnote setup
 ```
 
-The installer checks the requirements above and says exactly what's missing. It puts the `sketchnote` binary in `~/.local/bin`, the GNOME Shell extension in `~/.local/share/gnome-shell/extensions/`, and a D-Bus activation file so the service starts on demand. Nothing needs Rust or a compiler. It is safe to re-run, which also updates to the latest release.
+The installer checks every requirement up front and names anything missing. It places the prebuilt binary in `~/.local/bin` and the extension in `~/.local/share/gnome-shell/extensions/`, with no compiler or Rust toolchain needed. `setup` downloads the speech model (Whisper `small`, 264 MB) and a voice detector, tests your microphone, and lets you choose between local and API transcription. Then **log out and back in once**, since GNOME on Wayland only loads new extensions at login.
 
-Then run `sketchnote setup`. It downloads the speech model (Whisper `small`, 264 MB) and a voice detector, checks your mic, asks whether to transcribe on your computer or through an API (and takes the key), and says what gets recorded. It's safe to re-run. Then **log out and back in once**: GNOME on Wayland only discovers new extensions at login.
+`sketchnote update` installs newer releases in place. It keeps your downloaded models, never interrupts a capture in progress, and tells you if the extension changed.
 
-To update later, run `sketchnote update`. It installs the latest release if it's newer, keeps the models you've already downloaded, and says if the extension changed and needs a re-login.
+## Use
 
-### Building from source
+| Key | Action |
+|---|---|
+| **Alt+Shift+S** | Start a capture, or finish the running one (the pencil icon in the top bar does the same) |
+| **Shift + drag** | Draw. Strokes fade on screen after about 1.5 s but are kept in the output |
+| **Shift + click** | Drop a numbered pin |
+| Click | Logged as a click, shown as a blue ring in the output |
+| **Ctrl+Z** · **Esc** | Undo the last stroke or pin · cancel and discard the capture |
+| **Ctrl+V** | Right after a capture is ready: paste its notes and contact sheet together |
+| **Alt+Shift+V** | Paste the latest capture again, any time |
 
-For working on Sketchnote: `./build-from-source.sh` builds the binary with cargo (needs Rust and cmake, and whisper.cpp takes minutes to compile), downloads the speech model (Whisper `small`, 264 MB, unless you've picked another) and a voice detector into `~/.local/share/sketchnote/models/`, symlinks `extension/sketchnote@local` into the extensions folder, and writes the D-Bus file. Safe to re-run.
+A pill at the top of the screen shows the state: **Recording** with a timer and mic level, then **Transcribing…**, then **Ready · Ctrl+V to paste**. If a build fails, a notification explains why in plain words and offers **Retry**; the recordings are kept, so nothing is lost.
 
-### Choosing the speech model
+<details>
+<summary>Pill states in detail</summary>
 
-Transcription runs on your CPU with a whisper.cpp model. To use another one, create `~/.config/sketchnote/config.toml`:
+- **Starting…** (grey dot): GNOME's screen recorder isn't running yet. The mic starts within about 0.1 s.
+- **Recording** (red dot): timer, a mic level bar on a fixed −60 to 0 dBFS scale, a red glow around the screen and a stop icon in the top bar. The pill has Undo, Cancel and Finish buttons.
+- **Mic is silent** (amber): the mic has recorded only digital silence for 3 seconds, so it's muted, or the wrong or a disconnected input. It clears as soon as sound comes in.
+- **Saving…** then **Transcribing…** (amber): about 10 s for 20 s of speech with the local model.
+- **Ready · Ctrl+V to paste** (green): the notes are on the clipboard. The pill hides after a few seconds.
+
+Ctrl+V pastes the notes, swaps the clipboard to the contact sheet and pastes again, so both arrive from one key press as ordinary pastes. Once you copy something else, Ctrl+V is normal again.
+
+</details>
+
+## What your agent receives
+
+```
+- #1 (0:04) “This footer has too much text, let's cut it down.”
+- (0:08) [clicked]
+- #2 (0:10) “And the model name here is out of date.”
+- #3 (0:11) [clicked] “This button should open the settings instead.”
+```
+
+…followed by a contact sheet: the cropped keyframes in note order, each with its number and your marks drawn on it. Every capture is also kept as a folder in `~/.local/share/sketchnote/captures/`, in case the agent needs more.
+
+<details>
+<summary>The capture bundle</summary>
+
+| File | Contents |
+|---|---|
+| `summary.md` | The notes above, pasted by Ctrl+V or Alt+Shift+V |
+| `contact-sheet.png` | Cropped keyframes in rows of two, in note order, with number badges |
+| `frames/frame-NN.png` | One keyframe per mark, cropped to the activity, annotations burned in |
+| `frames-full/frame-NN.png` | The same keyframes uncropped |
+| `recording.mp4` | Screen recording, H.264, 30 fps |
+| `audio.wav` | Microphone, 16 kHz mono |
+| `sketchnote.json` | Timings, strokes, clicks, pins, target window, word timestamps and marks |
+| `finish.json` | What the extension sent on Finish, so a failed build can be retried |
+| `error.txt` | Only after a failed build: the full error behind the notification |
+
+</details>
+
+## Transcription
+
+By default, speech is transcribed **on your CPU** with whisper.cpp, compiled into the binary, using the `small` model with word-level timestamps. English only, at roughly half real time.
+
+For faster, more accurate notes, you can point Sketchnote at a **transcription API**: Groq, OpenAI, or a self-hosted server, as long as its model returns word timings. Only the microphone recording is sent, never the screen. The API key lives in GNOME Keyring, never in a file. If the API fails for any reason (no network, a rejected key, no credit left, an outage), the local model takes over and a notification says what went wrong, so a capture is never lost.
+
+<details>
+<summary>Choosing a local model</summary>
+
+Create `~/.config/sketchnote/config.toml`, then run `sketchnote download-model`. The next capture uses it; nothing needs restarting.
 
 ```toml
 [local]
 model = "large-v3-turbo-q8_0"
 ```
 
-then run `sketchnote download-model` to download it. The next capture uses it; nothing needs restarting. Names are a size (`tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`), optionally `.en` for an English-only model and `-q5_0`/`-q5_1`/`-q8_0` for a smaller file, as listed on [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main). Bigger models hear you better and take longer: on a laptop CPU, 30 s of speech took 2 s with `tiny-q8_0` and 26 s with the default `small-q8_0`.
+Names are a size (`tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`), optionally `.en` for English-only and `-q5_0`, `-q5_1` or `-q8_0` for a smaller file, as listed on [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main). Bigger models hear better but run slower: on a laptop CPU, 30 s of speech took 2 s with `tiny-q8_0` and 26 s with the default `small-q8_0`.
 
-### Transcribing through an API instead
+</details>
 
-A transcription API runs a bigger model in about a second, so you get better notes without waiting on your CPU. It sends the **microphone recording** (never the screen recording) to that provider. Any OpenAI-compatible server works if its model returns word timings, which the notes need:
-
-| Provider | `url` | `model` | Price |
-|---|---|---|---|
-| [Groq](https://console.groq.com) (default) | `https://api.groq.com/openai/v1` | `whisper-large-v3-turbo`, or `whisper-large-v3` for a little more accuracy | about $0.04 per hour of audio |
-| OpenAI | `https://api.openai.com/v1` | `whisper-1` (OpenAI shuts it down on 2027-02-26; its newer models give no word timings) | $0.36 per hour |
-| [Speaches](https://github.com/speaches-ai/speaches) on your own machine | e.g. `http://localhost:8000/v1` | e.g. `Systran/faster-whisper-large-v3` | free |
+<details>
+<summary>Using an API</summary>
 
 ```toml
 transcriber = "api"
@@ -52,121 +120,109 @@ url = "https://api.groq.com/openai/v1"
 model = "whisper-large-v3-turbo"
 ```
 
-APIs tend to stretch each word over the silence around it, which would hide the pauses Sketchnote uses to split a sentence between the things you circled. So the returned words are re-timed on your machine against the speech the local voice detector finds in the recording.
+Then run `sketchnote set-key` and paste the key. Keys are stored per `url`; leave the key empty to remove it. Set `transcriber = "local"`, or remove the line, to go back.
 
-Then run `sketchnote set-key` and paste your API key. It's stored in your desktop keyring (GNOME Keyring), one per `url`, never in the config file; leave it empty to remove it. If the API fails for any reason (no internet, a rejected key, no credit left, an outage), the model on your machine transcribes the capture instead, so you still get your notes. The pill then says "Ready (local model)", a notification says what went wrong with the API, and its Retry transcribes through the API again once you've fixed it. If the local model fails too, the notification gives the API's reason. `transcriber = "local"` (or no line at all) goes back to the model on your machine.
+| Provider | `url` | `model` | Price |
+|---|---|---|---|
+| [Groq](https://console.groq.com) (default) | `https://api.groq.com/openai/v1` | `whisper-large-v3-turbo`, or `whisper-large-v3` for a little more accuracy | about $0.04 per hour of audio |
+| OpenAI | `https://api.openai.com/v1` | `whisper-1` (retired on 2027-02-26; newer OpenAI models give no word timings) | $0.36 per hour |
+| [Speaches](https://github.com/speaches-ai/speaches), self-hosted | e.g. `http://localhost:8000/v1` | e.g. `Systran/faster-whisper-large-v3` | free |
 
-Requirements: a Rust toolchain and `cmake` to build (whisper.cpp is compiled in), plus `ffmpeg` (with libx264), `pw-record` and `notify-send`, which Ubuntu with GNOME 50 already has.
+When the API falls back to the local model, the pill says "Ready (local model)", and the notification's Retry transcribes through the API again once you've fixed the cause.
 
-## Use
-
-| Key | What it does |
-|---|---|
-| Alt+Shift+S | Start a capture, or finish the running one (the pencil icon in the top bar does the same) |
-| hold Shift + drag | Draw a thin red stroke. It fades on screen after about 1.5 s but is kept in the output |
-| Shift + click | Drop a numbered pin |
-| click | Logged as a click (blue ring in the output) |
-| Ctrl+Z | Undo the last stroke or pin |
-| Esc | Cancel and throw the capture away |
-| Ctrl+V | Right after a capture is ready: paste its notes and contact sheet together |
-| Alt+Shift+V | Paste the latest capture's notes and contact sheet, any time |
-
-Starting a capture starts the microphone at once and the screen recorder within a second or two. The pill at top centre always says which state it's in:
-
-- **Starting…** with a grey dot: the screen recorder isn't running yet.
-- **Recording**: a red dot, the timer and a green mic level bar that follows your voice, a red glow around the screen, and a stop icon in the top bar. The bar uses a fixed −60 to 0 dBFS scale like system sound meters, so if it sits high while you're quiet, your input is noisy or its gain is too high.
-- **Mic is silent** in amber next to the timer: the mic has recorded only digital silence for the last 3 seconds (muted, or the wrong or a disconnected input). It clears as soon as sound comes in.
-- The pill has **Undo / Cancel / Finish**.
-
-After Finish, the pill stays up with an amber dot: **Saving…**, then **Transcribing…** (about 10 s for 20 s of speech on CPU). It turns green with **Ready · Ctrl+V to paste** when the notes are on the clipboard, then hides after a few seconds. If building fails, the pill says so and a notification gives the reason in plain words (say, the speech model is missing) with a **Retry** button. The recordings are kept, so Retry builds the same capture again once you've fixed the cause. The notification stays in the message tray until you dismiss it. Press Ctrl+V in your agent's input box: the extension pastes the notes, swaps the clipboard to the contact sheet and pastes again, so you get the text and the image from one key press. Each is an ordinary paste, so this works in any app that accepts pasted text and images. Once you copy something else, Ctrl+V is normal again; Alt+Shift+V pastes the latest capture whenever you want it back.
-
-CLI: `sketchnote latest | service | transcribe file.wav | download-model | set-key` (from a source build, `target/release/sketchnote`).
-
-## Output
-
-Each capture is a folder `~/.local/share/sketchnote/captures/<timestamp>.bundle/`:
-
-| File | Contents |
-|---|---|
-| `recording.mp4` | Screen recording, H.264, 30 fps |
-| `audio.wav` | Microphone, 16 kHz mono |
-| `frames/frame-NN.png` | Keyframe per mark, cropped to the activity, annotations burned in |
-| `frames-full/frame-NN.png` | The same keyframes uncropped |
-| `contact-sheet.png` | Cropped keyframes in rows of two, in note order, with number badges |
-| `summary.md` | The handoff text, pasted by Ctrl+V or Alt+Shift+V |
-| `sketchnote.json` | Timings, strokes, clicks, pins, target window, word timestamps, marks |
-| `finish.json` | What the extension sent on Finish, so a failed build can be retried |
-| `error.txt` | Only after a failed build: the full error behind the notification |
-
-`summary.md` looks like this:
-
-```
-- #1 (0:04) “This footer has too much text, let's cut it down.”
-- (0:08) [clicked]
-- #2 (0:10) “And the model name here is out of date.”
-- #3 (0:11) [clicked] “This button should open the settings instead.”
-```
+</details>
 
 ## Privacy
 
-A capture records your **whole screen** (every monitor, whatever is on it) and your **microphone**, from Alt+Shift+S until you finish or cancel. By default everything stays on your machine: transcription runs locally, and nothing is uploaded. Only what you paste leaves, and only to wherever you paste it. If you [switch to a transcription API](#transcribing-through-an-api-instead), each capture's microphone recording is sent to that provider to be transcribed, under its own data policy; the screen recording and images still never leave.
+- A capture records your **whole screen** (every monitor) and your **microphone**, from Alt+Shift+S until you finish or cancel.
+- Everything stays local by default. Only what you paste leaves, and only to where you paste it. With an API, the microphone recording goes to that provider under its own data policy.
+- Captures delete themselves once they've sat unchanged for **24 hours**; the service checks at startup and hourly. Cancelling deletes a capture immediately. The retention period is `KEEP_CAPTURES` in `src/service.rs`.
 
-Captures are kept for **one day**. The service deletes any capture folder that hasn't changed in 24 hours, checking when it starts and every hour after. Cancelling a capture deletes it straight away. To delete everything sooner, remove `~/.local/share/sketchnote/captures/`. The retention period is `KEEP_CAPTURES` in `src/service.rs`; there's no settings UI.
+## How it works
 
-## How it's built
-
-- **`extension/sketchnote@local/extension.js`** (GNOME Shell extension). It handles the hotkey, glow, pill, live ink, pins, click logging, undo and cancel. It records the screen through GNOME Shell's own Screencast service. Only the Shell may call that service, so there's no portal prompt and the recording code lives in the extension.
-- **The `sketchnote` binary** (Rust, `src/`). `sketchnote service` is the D-Bus service `org.sketchnote.Service`, started on demand:
-  - `service.rs` records the mic with `pw-record` and builds the bundle on Finish.
-  - `bundle.rs` converts the video with ffmpeg and writes the bundle.
-  - `notes.rs` turns events into marks, assigns speech to them and writes `summary.md`.
-  - `draw.rs` draws keyframes, crops and the contact sheet.
-  - `transcribe.rs` runs whisper.cpp (`small`, 8-bit) in-process, with word timestamps.
-
-To rename, change `sketchnote`/`org.sketchnote` in those files, the extension uuid, and both install scripts.
-
-## Design decisions
-
-These are the simplest options, picked deliberately. Change them freely.
-
-- **Hotkeys.** Alt+Shift+S and Alt+Shift+V are constants at the top of `extension.js`. There's no settings UI.
-- **Pasting text and image together.** A clipboard holds one thing that apps reliably paste, so the extension pastes twice: notes first, then the contact sheet, 0.4 s apart. Alt+Shift+V waits until you release Alt and Shift, otherwise the app would see Ctrl+Alt+Shift+V.
-- **Whole screen only.** A capture always records the whole screen, all monitors as one image, so you can switch apps freely. There's no Area or Window mode; the contact sheet already crops each keyframe around your marks. There's no iPhone mode.
-- **Marks.** Every stroke and pin is a numbered mark. A click is numbered only if something you said lands on it; otherwise it's listed as an unnumbered `- (0:07) [clicked]` line with no keyframe, unless the capture has only clicks and none were spoken about, in which case they're all numbered. Speech is kept as whole sentences: each sentence goes to the mark it overlaps most in time, counting from that mark until the next. A sentence is split at a mark only where you paused for 1 s or more, as when you circle three things saying "this part, … this part, … and this part". Words spoken before the first mark go to #1. If the transcript has no punctuation, words are split at marks by time. With no marks, the whole capture is one note keyed on the last frame.
-- **Note tags.** Clicks are tagged `[clicked]` and pins `[pin]`.
-- **Pins.** A red dot that fades like strokes. It shows no number while you record, because numbers are only final once the notes are built (a click nobody spoke about loses its number); the keyframes show the real number.
-- **Undo.** Removes the last stroke or pin. Clicks can't be undone.
-- **Fade timing.** Strokes stay 0.5 s, then fade over 1 s.
-- **Clicks on screen.** Not shown live. Clicks on the pill or the top bar aren't logged.
-- **Keyframes.** Taken 0.1 s after a stroke ends (or a click or pin lands). The crop is the activity's bounding box plus 160 px, at least 640×400, clamped to the window under the activity.
-- **Notes only.** `summary.md` is just the numbered notes, with no header, crop or attachment lines, because the image is pasted alongside. The target app and window are still in `sketchnote.json`.
-- **After Finish.** A status pill (Saving… / Transcribing… / Ready) instead of a notification, because local transcription takes a while.
-- **Esc and Ctrl+Z.** Grabbed globally, but only while a capture runs.
-
-## Known limitations
-
-- **Shift is reserved while capturing.** While Shift is held during a capture, clicks, drags and keys go to Sketchnote, so you can't Shift+click to select a range or type capital letters until you finish or cancel. Shift was chosen over Space because laptops switch the touchpad off while a non-modifier key is held (GNOME's "disable touchpad while typing"), which made Space+drag fail.
-- **The recording shows Sketchnote's own UI.** GNOME's screencast records everything on screen, and GNOME Shell can't hide one of its actors from it, so `recording.mp4` includes the pill, the glow and the live strokes. Keyframe crops start below the pill when the mark is below it, and are trimmed off the red edge glow up to the mark's own edge; a mark right next to the pill keeps it in view. The strokes in the keyframes are redrawn on top in the same spot.
-- **Pill placement.** The pill sits on the primary monitor.
-- **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`; the pill says **Starting…** until it's running. The mic starts within about 0.1 s, and both offsets are stored and applied. I've seen it take 14 s once. If you cancel or finish and immediately start again, the new capture waits for the previous recording to stop before it starts recording.
-- **Missed clicks.** Clicks are detected by polling every 10 ms, so a press shorter than that could be missed.
-- **Heavy work runs niced.** Building a bundle runs at nice 10, and transcription uses half the CPU cores, so the desktop stays responsive.
-- **CPU transcription, English only.** It takes roughly 0.5× real time. The language is fixed to English, because auto-detection was slower and sometimes picked the wrong language. See [Choosing the speech model](#choosing-the-speech-model) to trade speed for accuracy. `sketchnote transcribe file.wav` prints a recording's words with timestamps.
-
-## Tests
-
-```sh
-cargo test                             # bundle logic (marks, speech split, crops, layout)
-tests/e2e.py speech.wav                # full run in a throwaway headless GNOME Shell
+```mermaid
+flowchart LR
+    subgraph Shell["GNOME Shell extension (GJS)"]
+        K[Hotkeys, ink, pill] --> S[Screencast]
+        K --> P[One-key paste]
+    end
+    subgraph Service["sketchnote service (Rust)"]
+        M[pw-record mic] --> T[whisper.cpp / API]
+        T --> N[Marks + notes]
+        N --> D[Keyframes + contact sheet]
+    end
+    K <-->|D-Bus| M
+    D --> P
 ```
 
-CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, clippy with warnings as errors and `cargo test` on every PR, and syntax-checks the extension and scripts. `e2e.py` needs GNOME Shell, so run it locally before merging extension changes.
+Sketchnote has two halves that talk over D-Bus (`org.sketchnote.Service`). The **extension** lives inside GNOME Shell. It owns the hotkeys, live ink, pins, click logging and the paste, and it records the screen through the Shell's own Screencast service. Only the Shell may call that service, which is why there's no screen-sharing prompt and why this part has to be an extension. The **service** is a Rust binary that D-Bus starts on demand. It records the microphone, transcribes, and builds the bundle.
 
-`e2e.py` doesn't touch your session. It starts `gnome-shell --headless` on a private bus with a private dconf, enables the extension there, and plays `speech.wav` (about 30 s of you talking, any WAV) into a virtual mic. It then drives real keyboard and pointer input through Mutter's RemoteDesktop API: strokes, clicks, a pin, undo, cancel-and-restart and Finish. Finally it checks the bundles and the paste. Results are written to `~/.local/share/sketchnote/captures/`.
+A few problems that were more interesting than they look:
+
+- **Matching speech to marks.** Each sentence goes to the mark it overlaps most in time. A sentence is only split where you paused for at least a second, so "this part… this part… and this part" lands on three different circles, while a thought that spans two marks stays whole.
+- **Honest word timings from APIs.** API transcribers stretch each word across the silence around it, which hides those pauses. Sketchnote re-times the API's words against the speech that a local voice-activity model finds in the recording.
+- **Text and an image from one key.** A clipboard reliably holds one thing at a time. So the extension takes over Ctrl+V for a single paste: it pastes the notes, swaps the clipboard to the image and pastes again through a virtual keyboard, then restores normal behaviour.
+- **A portable binary.** Releases are built on Ubuntu 24.04 with whisper.cpp pinned to an AVX2/FMA/F16C baseline instead of the build machine's CPU, so one binary runs on any GNOME 50 machine from the last decade. The cost is about 20% of transcription speed.
+- **Safe self-update.** `update` stages the new binary and extension beside the old ones and swaps them in only when everything is in place. It asks the running service to quit once it's idle, so an update never interrupts a recording or a transcription.
+
+| Path | Role |
+|---|---|
+| `extension/sketchnote@local/extension.js` | Hotkeys, ink, pill, pins, clicks, screen recording, paste |
+| `src/service.rs` | D-Bus service: mic recording, capture lifecycle, retention |
+| `src/notes.rs` | Events into marks, speech assigned to marks, `summary.md` |
+| `src/transcribe.rs` · `src/api.rs` | whisper.cpp with DTW word timestamps and voice-activity re-timing · the API client |
+| `src/bundle.rs` · `src/media.rs` · `src/draw.rs` | Bundle assembly, ffmpeg video and frames, keyframes, crops, contact sheet |
+| `src/setup.rs` · `src/update.rs` | First-run setup · self-update |
+| `site/` | The landing page, hosted on Cloudflare (`npx wrangler deploy`) |
+
+<details>
+<summary>Design decisions</summary>
+
+These are the simplest options, picked deliberately.
+
+- **Hotkeys** are constants at the top of `extension.js`. There's no settings UI.
+- **Whole screen only.** A capture records all monitors as one image, so you can switch apps freely. There's no area or window mode; the contact sheet already crops each keyframe around your marks.
+- **Marks.** Every stroke and pin is a numbered mark. A click is numbered only if something you said lands on it; otherwise it's an unnumbered `[clicked]` line with no keyframe, unless the capture has only clicks and none were spoken about. Words before the first mark go to #1. Without punctuation, words are split at marks by time. With no marks at all, the whole capture becomes one note on the last frame.
+- **Tags.** Clicks are tagged `[clicked]` and pins `[pin]`. `summary.md` has no header, because the image is pasted alongside it; the target app and window are in `sketchnote.json`.
+- **Pins** are red dots that fade like strokes. They show no number while recording, because numbers are only final once the notes are built.
+- **Undo** removes the last stroke or pin. Clicks can't be undone, and clicks on the pill or top bar aren't logged.
+- **Timing.** Strokes stay 0.5 s, then fade over 1 s. Keyframes are taken 0.1 s after a mark lands. Each crop is the activity's bounding box plus 160 px, at least 640×400, clamped to the window underneath.
+- **Paste.** The two pastes are 0.4 s apart. Alt+Shift+V waits until Alt and Shift are released, otherwise the app would see Ctrl+Alt+Shift+V.
+- **Esc and Ctrl+Z** are grabbed globally, but only while a capture runs.
+
+</details>
+
+<details>
+<summary>Known limitations</summary>
+
+- **Shift is reserved while capturing.** While it's held, clicks, drags and keys go to Sketchnote, so you can't Shift+click to select or type capital letters mid-capture. Shift was chosen over Space because laptops switch the touchpad off while a non-modifier key is held.
+- **The recording includes Sketchnote's own UI.** GNOME's screencast can't exclude Shell actors, so `recording.mp4` shows the pill, the glow and the live strokes. Keyframe crops avoid the pill and the glow where they can, and strokes are redrawn crisply on top.
+- **Recording start lag.** GNOME's screencast takes about 0.5 to 2 s to start, and once took 14 s, so the first moment may be missing from the video. Both start offsets are recorded and applied. A new capture started right after the last one waits for the previous recording to stop.
+- **The pill sits on the primary monitor.**
+- **Clicks are polled every 10 ms**, so a press shorter than that could be missed.
+- **English only.** Auto-detection was slower and sometimes picked the wrong language.
+- **Heavy work runs niced.** Building runs at nice 10, and transcription uses half the cores, so the desktop stays responsive.
+
+</details>
+
+## Development
+
+```sh
+./build-from-source.sh      # cargo build, models, extension symlink, D-Bus file (needs Rust and cmake)
+cargo test                  # notes, speech assignment, crops, layout
+tests/e2e.py speech.wav     # the full workflow in a throwaway headless GNOME Shell
+```
+
+`e2e.py` never touches your session. It starts `gnome-shell --headless` on a private bus with its own dconf, plays any WAV of speech into a virtual microphone, and drives real keyboard and pointer input through Mutter's RemoteDesktop API: strokes, clicks, pins, undo, cancel-and-restart, finishing, and both paste paths. It then checks the bundles and the pasted output.
+
+CI runs `cargo fmt --check`, clippy with warnings as errors, and `cargo test` on every pull request, and syntax-checks the extension and scripts. Pushing a `v*` tag builds and publishes a release. `sketchnote transcribe file.wav` prints a recording's words with timestamps, which is useful when tuning transcription.
 
 ## Uninstall
 
 ```sh
 gnome-extensions disable sketchnote@local
-rm ~/.local/share/gnome-shell/extensions/sketchnote@local ~/.local/share/dbus-1/services/org.sketchnote.Service.service
+rm -r ~/.local/bin/sketchnote ~/.local/share/gnome-shell/extensions/sketchnote@local \
+      ~/.local/share/dbus-1/services/org.sketchnote.Service.service
 ```
+
+Add `~/.local/share/sketchnote` to also remove the models and any remaining captures.
