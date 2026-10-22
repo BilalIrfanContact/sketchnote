@@ -1,0 +1,3 @@
+# Cloudflare Pages redirects. `curl -fsSL <site>/install | bash` follows this to the
+# newest release's installer, so new releases need no change here.
+/install  https://github.com/BilalIrfanContact/sketchnote/releases/latest/download/install.sh  302

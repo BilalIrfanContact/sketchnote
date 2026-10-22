@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sketchnote: circle the bug, say what's wrong, paste it to your agent</title>
+  <meta name="description" content="Sketchnote for GNOME records your screen and voice while you draw on it, then pastes timestamped notes and annotated frames into your coding agent with one Ctrl+V.">
+  <meta name="theme-color" content="#0b0b0c">
+  <meta name="color-scheme" content="dark">
+  <meta property="og:title" content="Sketchnote: show your coding agent the problem">
+  <meta property="og:description" content="Talk, draw on your screen, and paste the notes and annotated frames into your agent. For GNOME on Linux.">
+  <meta property="og:type" content="website">
+  <link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0b0c'/%3E%3Cpath d='M9 18c0-6 5-9 9-8.5s6 4 5 7.5-5 6-9 5.5S8 19 9.5 15' fill='none' stroke='%23f4f4f1' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="Sketchnote home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M9 18c0-6 5-9 9-8.5s6 4 5 7.5-5 6-9 5.5S8 19 9.5 15"/></svg>
+      Sketchnote
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#privacy">Privacy</a>
+      <a href="https://github.com/BilalIrfanContact/sketchnote">GitHub</a>
+    </nav>
+    <a class="btn btn-primary btn-small" href="#install">Install</a>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">For GNOME on Linux</p>
+        <h1>Circle the bug.<br>Say what's wrong.</h1>
+        <p class="lede">Talk and draw on your screen. One Ctrl+V gives your coding agent the notes and the annotated frames.</p>
+        <div class="hero-actions">
+          <div class="command" data-copy>
+            <code><span class="prompt">$</span> <span class="cmd-text">curl -fsSL https://getsketchnote.pages.dev/install | bash</span></code>
+            <button class="copy" type="button" aria-label="Copy install command">Copy</button>
+          </div>
+          <a class="btn btn-ghost" href="https://github.com/BilalIrfanContact/sketchnote">View on GitHub</a>
+        </div>
+      </div>
+
+      <!-- Animated walkthrough of one capture. main.js drives it by setting data-step on .stage. -->
+      <figure class="stage" data-step="0" aria-label="Animation: a capture is recorded, two marks are drawn while talking, and the notes and contact sheet are pasted into an agent.">
+        <div class="desktop">
+          <div class="topbar"><span>Activities</span><span class="clock">Thu 10:42</span><span class="tray"></span></div>
+
+          <div class="pill" aria-hidden="true">
+            <span class="dot"></span>
+            <span class="pill-label"><span class="timer">0:00</span><span class="meter"><i></i></span></span>
+            <span class="pill-state">Transcribing…</span>
+            <span class="pill-ready">Ready · Ctrl+V to paste</span>
+          </div>
+
+          <div class="window app">
+            <div class="titlebar"><span>Settings</span><i></i></div>
+            <!-- Laid out on the same 400x260 grid as the ink SVG, so strokes land on their targets. -->
+            <h3>Notifications</h3>
+            <div class="row r1"><span>Show previews on the lock scr</span><b class="toggle on"></b></div>
+            <div class="row r2"><span>Do not disturb</span><b class="toggle"></b></div>
+            <div class="row r3"><span>Sound</span><b class="toggle on"></b></div>
+            <span class="btn-fake cancel">Cancel</span>
+            <span class="btn-fake save">Save</span>
+            <svg class="ink" viewBox="0 0 400 260" preserveAspectRatio="none" aria-hidden="true">
+              <path class="stroke s1" pathLength="1" d="M300 202c6-14 44-18 66-10s24 22 6 30-56 8-70 0-10-18 4-24"/>
+              <path class="stroke s2" pathLength="1" d="M22 98c52 3 118 3 176 -1"/>
+            </svg>
+          </div>
+
+          <div class="caption" aria-hidden="true"><span class="c1">“The save button sits way off to the right.”</span><span class="c2">“And this label is cut off.”</span></div>
+
+          <div class="window agent">
+            <div class="titlebar"><span>Terminal</span><i></i></div>
+            <div class="agent-body">
+              <p class="agent-line">&gt; <span class="paste-text"><span>- #1 (0:03) “The save button sits way off to the right.”</span><span>- #2 (0:06) “And this label is cut off.”</span></span><span class="cursor"></span></p>
+              <div class="sheet">
+                <div class="crop"><em>1</em><span class="mini-save"></span><svg viewBox="0 0 100 60" preserveAspectRatio="none"><path pathLength="1" d="M58 40c-4-12 14-16 26-14s16 10 8 16-26 6-32 0-2-10 4-12"/></svg></div>
+                <div class="crop"><em>2</em><span class="mini-label"></span><svg viewBox="0 0 100 60" preserveAspectRatio="none"><path pathLength="1" d="M10 38c26 2 54 2 80 -1"/></svg></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </section>
+
+    <section class="how" id="how">
+      <h2>You talk. It takes the notes.</h2>
+      <ol class="steps">
+        <li>
+          <div class="step-key"><kbd>Alt</kbd><kbd>Shift</kbd><kbd>S</kbd></div>
+          <div>
+            <h3>Talk and draw</h3>
+            <p>Start a capture and explain the problem out loud. Hold Space and drag to circle what you mean, or just click on it.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-key"><span class="glyph" aria-hidden="true"><svg viewBox="0 0 48 24"><path d="M3 15c6-10 10 6 16-3s8 7 13-2 8 4 13-1"/></svg></span></div>
+          <div>
+            <h3>Every sentence lands on its mark</h3>
+            <p>Whisper transcribes your voice on your own CPU with word timings, so each sentence sits under the mark you drew while saying it. Frames are cropped to where you worked.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-key"><kbd>Ctrl</kbd><kbd>V</kbd></div>
+          <div>
+            <h3>One paste, text and image</h3>
+            <p>In your agent's input, a single Ctrl+V pastes the numbered notes and then a contact sheet of the frames. It works in any app that takes pasted text and images.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="output">
+      <div class="output-copy">
+        <h2>Plain notes an agent can act on</h2>
+        <p>Timestamped, numbered to match the frames, and short enough to read at a glance. The full bundle, with the recording and word timings, stays in a folder if the agent needs more.</p>
+      </div>
+      <pre class="summary"><code><span class="k">- #1</span> <span class="t">(0:04)</span> “This footer has too much text, let's cut it down.”
+<span class="k">-</span> <span class="t">(0:08)</span> <span class="tag">[clicked]</span>
+<span class="k">- #2</span> <span class="t">(0:10)</span> “And the model name here is out of date.”
+<span class="k">- #3</span> <span class="t">(0:11)</span> <span class="tag">[clicked]</span> “This button should open the settings instead.”</code></pre>
+    </section>
+
+    <section class="controls" aria-labelledby="controls-title">
+      <h2 id="controls-title">Seven keys, nothing to configure</h2>
+      <dl class="keys">
+        <div><dt><kbd>Alt</kbd><kbd>Shift</kbd><kbd>S</kbd></dt><dd>Start or finish a capture</dd></div>
+        <div><dt><kbd>Space</kbd> + drag</dt><dd>Draw</dd></div>
+        <div><dt><kbd>Space</kbd> + click</dt><dd>Drop a numbered pin</dd></div>
+        <div><dt><kbd>Ctrl</kbd><kbd>Z</kbd></dt><dd>Undo the last mark</dd></div>
+        <div><dt><kbd>Esc</kbd></dt><dd>Cancel and discard</dd></div>
+        <div><dt><kbd>Ctrl</kbd><kbd>V</kbd></dt><dd>Paste notes and frames</dd></div>
+        <div><dt><kbd>Alt</kbd><kbd>Shift</kbd><kbd>V</kbd></dt><dd>Paste the latest capture again</dd></div>
+      </dl>
+    </section>
+
+    <section class="privacy" id="privacy">
+      <p class="statement">Your screen and voice stay on your machine.</p>
+      <div class="facts">
+        <p><strong>Local by default.</strong> Transcription runs on your CPU. Nothing is uploaded; only what you paste leaves, to wherever you paste it.</p>
+        <p><strong>Gone after a day.</strong> Captures are deleted 24 hours after they're made. Cancelling deletes one straight away.</p>
+        <p><strong>API if you want it.</strong> Point it at Groq or any OpenAI-compatible server for faster notes. Only the mic audio is sent, never the screen.</p>
+      </div>
+    </section>
+
+    <section class="install" id="install">
+      <h2>Install</h2>
+      <p class="req">Needs GNOME 50 on Wayland, an x86_64 CPU from the last decade, and <code>ffmpeg</code> and <code>pw-record</code>. The installer checks all of it and tells you what's missing.</p>
+      <ol class="install-steps">
+        <li>
+          <p>Install the binary and the GNOME extension into <code>~/.local</code>:</p>
+          <div class="command" data-copy>
+            <code><span class="prompt">$</span> <span class="cmd-text">curl -fsSL https://getsketchnote.pages.dev/install | bash</span></code>
+            <button class="copy" type="button" aria-label="Copy install command">Copy</button>
+          </div>
+        </li>
+        <li><p>Log out and back in once, so GNOME loads the extension.</p></li>
+        <li>
+          <p>Download the speech model, check your mic, and choose local or API:</p>
+          <div class="command" data-copy>
+            <code><span class="prompt">$</span> <span class="cmd-text">sketchnote setup</span></code>
+            <button class="copy" type="button" aria-label="Copy setup command">Copy</button>
+          </div>
+        </li>
+      </ol>
+      <p class="update">Later, <code>sketchnote update</code> fetches the newest release and keeps your models.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>Sketchnote</span>
+    <a href="https://github.com/BilalIrfanContact/sketchnote">GitHub</a>
+    <span class="credit">Inspired by <a href="https://scrawl.kitlangton.com/">Scrawl</a> for Mac and Windows.</span>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>
