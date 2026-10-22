@@ -7,7 +7,7 @@ Starts `gnome-shell --headless` on its own session bus with its own dconf, enabl
 extension there, plays speech into a virtual microphone, and drives real keyboard/pointer
 input through Mutter's RemoteDesktop API:
 
-  capture 1: Alt+Shift+S, two strokes, two clicks, a Space-click pin, a stroke that is
+  capture 1: Alt+Shift+S, two strokes, two clicks, a Shift-click pin, a stroke that is
              undone with Ctrl+Z, then Alt+Shift+S to finish.
   capture 2: Alt+Shift+S, one stroke, click Finish in the pill.
   capture 3: Alt+Shift+S, Esc before the recording has started, Alt+Shift+S again at
@@ -42,7 +42,7 @@ DISPLAY = 'sketchnote-e2e'
 bus = Gio.bus_get_sync(Gio.BusType.SESSION)
 
 KEY = {'shift': 0xffe1, 'alt': 0xffe9, 'ctrl': 0xffe3, 's': 0x73, 'z': 0x7a, 'esc': 0xff1b,
-       'space': 0x20, 'v': 0x76, 'c': 0x63}
+       'v': 0x76, 'c': 0x63}
 BTN_LEFT = 0x110
 
 
@@ -131,17 +131,15 @@ class Input:
         self.button(True)
         self.button(False)
 
-    def drag(self, points, space=True):
-        if space:
-            self.key('space', True)
-            time.sleep(0.05)
+    def drag(self, points):
+        self.key('shift', True)
+        time.sleep(0.05)
         self.move(*points[0])
         self.button(True)
         for p in points[1:]:
             self.move(*p)
         self.button(False)
-        if space:
-            self.key('space', False)
+        self.key('shift', False)
 
 
 def ellipse(cx, cy, rx, ry, n=40):
@@ -212,7 +210,7 @@ def main():
         at(t0, 14.4)
         inp.click(860, 560)
         at(t0, 21.6)
-        inp.drag([(1100, 450), (1101, 451)])                 # Space+click = pin
+        inp.drag([(1100, 450), (1101, 451)])                 # Shift+click = pin
         at(t0, 25.7)
         inp.drag(line(600, 700, 900, 705))
         at(t0, 27.5)
