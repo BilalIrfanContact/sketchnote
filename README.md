@@ -1,3 +1,5 @@
+<img src="site/logo.svg" alt="" width="72">
+
 # Sketchnote
 
 Show a coding agent the problem: press a hotkey, talk, click and draw on your screen,
