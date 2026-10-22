@@ -93,15 +93,16 @@ if (!reduceMotion && "IntersectionObserver" in window) {
 }
 
 // Hero logo: a red pen line follows the loop's centreline the way a hand would draw it,
-// then the exact logo shape replaces it. A click draws it again. Browsers mute audio until
-// the visitor interacts, so the first, automatic draw is usually silent.
+// then the exact logo shape replaces it. A click draws it again with a pencil sound; the
+// automatic draw on load stays silent, since browsers block audio before any interaction.
 const DRAW_MS = 480;
 const DRAW_EASE = "cubic-bezier(0.4, 0, 0.25, 1)";
 const mark = document.querySelector(".hero-mark");
 const pen = mark?.querySelector(".pen");
 let audio = null;
+let swipe = null;     // the sound playing now, stopped if the logo is redrawn
 
-function drawLogo(delayMs = 0) {
+function drawLogo(delayMs = 0, sound = true) {
   if (!pen || reduceMotion) return;
   pen.getAnimations().forEach((a) => a.cancel());
   mark.classList.add("drawing");
@@ -109,7 +110,7 @@ function drawLogo(delayMs = 0) {
   const draw = pen.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }],
     { duration: DRAW_MS, delay: delayMs, easing: DRAW_EASE, fill: "both" });
   draw.finished.then(() => mark.classList.remove("drawing"), () => {});  // cancelled: a redraw took over
-  pencilSound(delayMs / 1000);                        // the swipe spans the quick draw
+  if (sound) pencilSound(delayMs / 1000);             // the swipe spans the quick draw
 }
 
 // Pencil on paper: one quick swipe of band-passed noise, a fast rise and a fade, with random
@@ -118,6 +119,7 @@ const SOUND_S = 0.4;
 function pencilSound(delay) {
   audio ??= new AudioContext();
   if (audio.state === "suspended") audio.resume().catch(() => {});
+  try { swipe?.stop(); } catch {}     // a second stop() throws in some browsers
   const t0 = audio.currentTime + delay + 0.02;
   const length = Math.ceil(audio.sampleRate * SOUND_S);
   const buffer = audio.createBuffer(1, length, audio.sampleRate);
@@ -138,13 +140,14 @@ function pencilSound(delay) {
     const grain = 0.55 + 0.45 * Math.random();
     gain.gain.linearRampToValueAtTime(0.32 * level * grain, t0 + p * SOUND_S);
   }
+  swipe = noise;
   noise.start(t0);
   noise.stop(t0 + SOUND_S + 0.05);
 }
 
 if (mark) {
   mark.addEventListener("click", () => drawLogo());
-  drawLogo(300);
+  drawLogo(300, false);
 }
 
 runDemo();
