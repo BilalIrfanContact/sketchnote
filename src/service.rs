@@ -119,6 +119,8 @@ impl Service {
         if queued.is_err() {
             self.in_use.lock().unwrap().remove(&dir); // never built, so cleanup may have it
             self.idle.builds.fetch_sub(1, Ordering::SeqCst);
+            drop(rec);
+            self.idle.quit_if_idle(&self.rec); // nothing else will check now
         }
         queued.map_err(failed)?;
         Ok(path)
@@ -126,6 +128,8 @@ impl Service {
 
     fn retry(&self, dir: &str) -> fdo::Result<()> {
         let dir = PathBuf::from(dir);
+        // Held until it's queued, so QuitWhenIdle can't decide to quit in between.
+        let _rec = self.rec.lock().unwrap();
         // Checked and claimed under the lock cleanup deletes under, so it can't slip in between.
         let mut in_use = self.in_use.lock().unwrap();
         if in_use.contains(&dir) {
@@ -263,6 +267,7 @@ pub fn run() -> Result<()> {
                 std::thread::sleep(Duration::from_secs(60 * 60));
             }
         });
+        let on_shell_gone = idle.clone();
         conn.object_server().at(PATH, Service { rec: rec.clone(), builds, in_use, idle }).await?;
         conn.request_name(NAME).await?;
 
@@ -277,6 +282,7 @@ pub fn run() -> Result<()> {
         while let Some(change) = shell.next().await {
             if change.args()?.new_owner.is_none() {
                 rec.lock().unwrap().cancel();
+                on_shell_gone.quit_if_idle(&rec);
             }
         }
         Ok(())
