@@ -1,0 +1,37 @@
+# Pushing a tag like v0.0.2 builds the binary and publishes a GitHub Release with the
+# binary, the extension and install.sh. The binary's version is the tag minus its v
+# (SKETCHNOTE_VERSION), so Cargo.toml doesn't need bumping.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Pinned: older than every GNOME 50 distro, so the binary runs on all of them.
+    runs-on: ubuntu-24.04
+    env:
+      # whisper.cpp tunes itself to the build machine's CPU by default, which could crash
+      # on an older one. This baseline (AVX2, FMA, F16C) is what install.sh checks for.
+      GGML_NATIVE: 'OFF'
+      GGML_AVX: 'ON'
+      GGML_AVX2: 'ON'
+      GGML_FMA: 'ON'
+      GGML_F16C: 'ON'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: SKETCHNOTE_VERSION="${GITHUB_REF_NAME#v}" cargo build --release --locked
+      - name: Package
+        run: |
+          mkdir dist
+          cp target/release/sketchnote install.sh dist/
+          tar -czf dist/sketchnote-extension.tar.gz -C extension/sketchnote@local .
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes

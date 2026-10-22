@@ -1,24 +1,24 @@
 # Sketchnote
 
 Show a coding agent the problem: press a hotkey, talk, click and draw on your screen,
-then paste the result into your agent. A Linux (GNOME 50, Wayland) take on
+then paste the result into your agent. A Linux take on
 [Scrawl](https://scrawl.kitlangton.com/).
+
+**Requires GNOME 50** (Wayland) on an x86_64 CPU with AVX2, FMA and F16C (most since about 2015), plus `ffmpeg` and PipeWire's `pw-record`.
 
 ## Install
 
 ```sh
-./install.sh
+curl -fsSL https://github.com/BilalIrfanContact/sketchnote/releases/latest/download/install.sh | bash
 ```
 
-Then **log out and back in once**. GNOME on Wayland only discovers new extensions at login.
+The installer checks the requirements above and says exactly what's missing. It puts the `sketchnote` binary in `~/.local/bin`, the GNOME Shell extension in `~/.local/share/gnome-shell/extensions/`, and a D-Bus activation file so the service starts on demand. Nothing needs Rust or a compiler. It is safe to re-run, which also updates to the latest release.
 
-`install.sh` does three things:
+Then **log out and back in once**: GNOME on Wayland only discovers new extensions at login.
 
-- Builds the `sketchnote` binary with cargo and downloads the speech model (Whisper `small`, 264 MB, unless you've picked another) and a voice detector into `~/.local/share/sketchnote/models/`.
-- Symlinks `extension/sketchnote@local` into `~/.local/share/gnome-shell/extensions/` and enables it.
-- Writes a D-Bus activation file so the service starts on demand.
+### Building from source
 
-It is safe to re-run.
+For working on Sketchnote: `./build-from-source.sh` builds the binary with cargo (needs Rust and cmake, and whisper.cpp takes minutes to compile), downloads the speech model (Whisper `small`, 264 MB, unless you've picked another) and a voice detector into `~/.local/share/sketchnote/models/`, symlinks `extension/sketchnote@local` into the extensions folder, and writes the D-Bus file. Safe to re-run.
 
 ### Choosing the speech model
 
@@ -29,7 +29,7 @@ Transcription runs on your CPU with a whisper.cpp model. To use another one, cre
 model = "large-v3-turbo-q8_0"
 ```
 
-then run `./target/release/sketchnote download-model` (or `./install.sh` again) to download it. The next capture uses it; nothing needs restarting. Names are a size (`tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`), optionally `.en` for an English-only model and `-q5_0`/`-q5_1`/`-q8_0` for a smaller file, as listed on [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main). Bigger models hear you better and take longer: on a laptop CPU, 30 s of speech took 2 s with `tiny-q8_0` and 26 s with the default `small-q8_0`.
+then run `./target/release/sketchnote download-model` (or `./build-from-source.sh` again) to download it. The next capture uses it; nothing needs restarting. Names are a size (`tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`), optionally `.en` for an English-only model and `-q5_0`/`-q5_1`/`-q8_0` for a smaller file, as listed on [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main). Bigger models hear you better and take longer: on a laptop CPU, 30 s of speech took 2 s with `tiny-q8_0` and 26 s with the default `small-q8_0`.
 
 ### Transcribing through an API instead
 
@@ -120,7 +120,7 @@ Captures are kept for **one day**. The service deletes any capture folder that h
   - `draw.rs` draws keyframes, crops and the contact sheet.
   - `transcribe.rs` runs whisper.cpp (`small`, 8-bit) in-process, with word timestamps.
 
-To rename, change `sketchnote`/`org.sketchnote` in those files, the extension uuid, and `install.sh`.
+To rename, change `sketchnote`/`org.sketchnote` in those files, the extension uuid, and both install scripts.
 
 ## Decisions where the spec says "unknown"
 
