@@ -7,7 +7,7 @@ use std::io::{BufRead, Write};
 use std::process::Command;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use crate::config::{self, Transcriber};
 use crate::media::Mic;
@@ -66,36 +66,47 @@ fn extension_active() -> bool {
         .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).lines().any(|l| l.trim() == "State: ACTIVE"))
 }
 
-/// Records 3 s with a live level bar, then says whether anything was heard.
+/// Records at least 3 s with a live level bar, then says whether anything was heard.
 fn check_mic() -> Result<()> {
-    let dir = tempfile_dir()?;
-    let wav = dir.join("mic-check.wav");
+    // In our own data dir, not a shared /tmp: it's a recording of the user.
+    let wav = crate::data_dir().join("mic-check.wav");
+    std::fs::create_dir_all(crate::data_dir())?;
     println!("Say something for 3 seconds…");
     let mic = Mic::start(&wav)?;
-    for _ in 0..30 {
-        std::thread::sleep(Duration::from_millis(100));
-        let bars = (Mic::level(&wav).unwrap_or(0.0) * 30.0).round() as usize;
-        print!("\r  [{:<30}]", "#".repeat(bars.min(30)));
-        std::io::stdout().flush()?;
-    }
-    println!();
+    let metered = meter(&wav); // the recorder is stopped whatever happened
     mic.stop();
-    let silent = Mic::is_silent(&wav).unwrap_or(true);
-    let _ = std::fs::remove_dir_all(&dir);
-    if silent {
-        println!(
+    let heard = Mic::is_silent(&wav).map(|silent| !silent);
+    let enough = std::fs::metadata(&wav).is_ok_and(|m| m.len() >= MIC_CHECK_BYTES);
+    let _ = std::fs::remove_file(&wav);
+    metered?;
+    match heard {
+        _ if !enough => println!(
+            "The mic didn't record 3 seconds of audio. Check that PipeWire is running and an input device is set in Settings → Sound, then run setup again."
+        ),
+        Ok(true) => println!("Heard you."),
+        _ => println!(
             "The mic only recorded silence. Check the input device and its volume in Settings → Sound, then run setup again."
-        );
-    } else {
-        println!("Heard you.");
+        ),
     }
     Ok(())
 }
 
-fn tempfile_dir() -> Result<std::path::PathBuf> {
-    let dir = std::env::temp_dir().join(format!("sketchnote-setup-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-    Ok(dir)
+/// A 16 kHz mono s16 WAV with 3 s in it: the header plus 3 × 16000 × 2 bytes.
+const MIC_CHECK_BYTES: u64 = 44 + 3 * 16000 * 2;
+
+/// Draws the level bar until `wav` holds 3 s of audio (giving up after 6 s).
+fn meter(wav: &std::path::Path) -> std::io::Result<()> {
+    let mut out = std::io::stdout().lock();
+    for tick in 0..60 {
+        std::thread::sleep(Duration::from_millis(100));
+        let bars = (Mic::level(wav).unwrap_or(0.0) * 30.0).round() as usize;
+        write!(out, "\r  [{:<30}]", "#".repeat(bars.min(30)))?;
+        out.flush()?;
+        if tick >= 29 && std::fs::metadata(wav).is_ok_and(|m| m.len() >= MIC_CHECK_BYTES) {
+            break;
+        }
+    }
+    writeln!(out)
 }
 
 /// Asks local or API, saves the choice, and takes the API key. Returns the API's host
@@ -107,25 +118,30 @@ fn choose_transcriber(config: &config::Config) -> Result<Option<String>> {
     print!("{}", if api_now { "[local/API]: " } else { "[LOCAL/api]: " });
     std::io::stdout().flush()?;
     let mut answer = String::new();
-    std::io::stdin().lock().read_line(&mut answer)?;
+    if std::io::stdin().lock().read_line(&mut answer)? == 0 {
+        anyhow::bail!("No answer given. Run `sketchnote setup` in a terminal.");
+    }
     let api = match answer.trim().to_lowercase().as_str() {
         "" => api_now,
         "api" | "a" => true,
         "local" | "l" => false,
         other => anyhow::bail!("\"{other}\" isn't local or api. Run setup again."),
     };
+    if api {
+        println!("The API's url and model are in {}; the default is Groq.", config::path().display());
+        if key::get(&config.api.url)?.is_some() {
+            println!(
+                "A key for {} is already in your keyring. To change it, run `sketchnote set-key`.",
+                config.api.url
+            );
+        } else {
+            key::set_interactively(&config.api.url)?;
+        }
+    }
+    // Saved last, so a setup stopped at the key prompt doesn't leave the API half set up.
     if api != api_now {
         config::set_transcriber(if api { "api" } else { "local" })?;
         println!("Saved in {}.", config::path().display());
     }
-    if !api {
-        return Ok(None);
-    }
-    println!("The API's url and model are in {}; the default is Groq.", config::path().display());
-    if key::get(&config.api.url)?.is_some() {
-        println!("A key for {} is already in your keyring. To change it, run `sketchnote set-key`.", config.api.url);
-    } else {
-        key::set_interactively(&config.api.url)?;
-    }
-    Ok(Some(host))
+    Ok(api.then_some(host))
 }

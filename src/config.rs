@@ -88,9 +88,19 @@ pub fn set_transcriber(value: &str) -> Result<()> {
         result => result.with_context(|| format!("reading {}", path.display()))?,
     };
     let text = with_transcriber(&text, value);
-    parse(&text).with_context(|| format!("updating {}", path.display()))?;
+    if parse(&text).is_err() {
+        // Only hand-written `transcriber` lines (quoted key, multi-line string) get here.
+        Err(Fix(format!(
+            "Couldn't change the transcriber line in {}. Set transcriber = \"{value}\" there by hand.",
+            path.display()
+        )))?;
+    }
     std::fs::create_dir_all(path.parent().unwrap())?;
-    std::fs::write(&path, text).with_context(|| format!("writing {}", path.display()))
+    // Written beside it, then renamed over it, so a failed write can't lose the old file.
+    let tmp = path.with_extension("toml.new");
+    std::fs::write(&tmp, text)
+        .and_then(|()| std::fs::rename(&tmp, &path))
+        .with_context(|| format!("writing {}", path.display()))
 }
 
 /// `text` with its top-level `transcriber = …` line replaced, or added at the top.
