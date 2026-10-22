@@ -62,6 +62,7 @@ pub fn run() -> Result<()> {
 fn extension_active() -> bool {
     Command::new("gnome-extensions")
         .args(["info", UUID])
+        .env("LC_ALL", "C") // the "State:" label is translated otherwise
         .output()
         .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).lines().any(|l| l.trim() == "State: ACTIVE"))
 }
@@ -136,6 +137,14 @@ fn choose_transcriber(config: &config::Config) -> Result<Option<String>> {
             );
         } else {
             key::set_interactively(&config.api.url)?;
+            if key::get(&config.api.url)?.is_none() {
+                println!(
+                    "No key saved, so transcription stays {}. (For a server that needs no key, set transcriber = \"api\" in {} by hand.)",
+                    if api_now { "on the API" } else { "on this computer" },
+                    config::path().display()
+                );
+                return Ok(api_now.then_some(host));
+            }
         }
     }
     // Saved last, so a setup stopped at the key prompt doesn't leave the API half set up.
