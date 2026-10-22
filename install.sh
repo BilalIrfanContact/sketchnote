@@ -95,6 +95,6 @@ gnome-extensions enable "$UUID" 2>/dev/null || {
 echo
 command -v sketchnote >/dev/null && run=sketchnote || run=$BIN
 echo "Installed. Now run: $run setup"
-if ! gnome-extensions info "$UUID" 2>/dev/null | grep -qi "state: *active"; then
+if ! LC_ALL=C gnome-extensions info "$UUID" 2>/dev/null | grep -q "State: ACTIVE"; then
     echo "The extension isn't active yet: log out and back in once (GNOME on Wayland only loads new extensions at login)."
 fi
