@@ -77,8 +77,8 @@ if (!reduceMotion && "IntersectionObserver" in window) {
 // Hero logo: a red pen line follows the loop's centreline the way a hand would draw it,
 // then the exact logo shape replaces it. A click draws it again. Browsers mute audio until
 // the visitor interacts, so the first, automatic draw is usually silent.
-const DRAW_MS = 1150;
-const DRAW_EASE = "cubic-bezier(0.55, 0.1, 0.3, 1)";
+const DRAW_MS = 480;
+const DRAW_EASE = "cubic-bezier(0.4, 0, 0.25, 1)";
 const mark = document.querySelector(".hero-mark");
 const pen = mark?.querySelector(".pen");
 let audio = null;
@@ -91,12 +91,12 @@ function drawLogo(delayMs = 0) {
   const draw = pen.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }],
     { duration: DRAW_MS, delay: delayMs, easing: DRAW_EASE, fill: "both" });
   draw.finished.then(() => mark.classList.remove("drawing"), () => {});  // cancelled: a redraw took over
-  pencilSound((delayMs + DRAW_MS * 0.15) / 1000);     // as the pen picks up speed
+  pencilSound(delayMs / 1000);                        // the swipe spans the quick draw
 }
 
 // Pencil on paper: one quick swipe of band-passed noise, a fast rise and a fade, with random
 // grain so it doesn't sound like hiss.
-const SOUND_S = 0.35;
+const SOUND_S = 0.4;
 function pencilSound(delay) {
   audio ??= new AudioContext();
   if (audio.state === "suspended") audio.resume().catch(() => {});
