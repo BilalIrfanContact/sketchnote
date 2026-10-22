@@ -13,7 +13,10 @@ Talk, draw on your screen, and paste timestamped notes with annotated frames int
 [![Release](https://img.shields.io/github/v/release/BilalIrfanContact/sketchnote?color=ff3030)](https://github.com/BilalIrfanContact/sketchnote/releases/latest)
 ![GNOME 50](https://img.shields.io/badge/GNOME-50%20·%20Wayland-4a86cf)
 
-<img src="docs/images/anatomy-light.png" alt="An isometric drawing of Sketchnote as a film studio: the GNOME extension records and draws on set, the Rust service transcribes and edits in the back room, and a delivery truck installs it." width="900">
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/anatomy-light.png">
+  <img src="docs/images/anatomy-light.gif" alt="Sketchnote as a film crew, with labels following a capture from the GNOME extension through recording, transcription and bundling to Ctrl+V." width="900">
+</picture>
 
 </div>
 
