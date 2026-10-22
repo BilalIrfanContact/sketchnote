@@ -44,7 +44,8 @@ pub fn set_interactively(url: &str) -> Result<()> {
     let entry = entry(url)?;
     match key.trim() {
         "" => match entry.delete_credential() {
-            Ok(()) | Err(Error::NoEntry) => println!("Removed the key for {url}."),
+            Ok(()) => println!("Removed the key for {url}."),
+            Err(Error::NoEntry) => println!("No key saved for {url}; run `sketchnote set-key` to add one."),
             Err(e) => return Err(e.into()),
         },
         key => {
