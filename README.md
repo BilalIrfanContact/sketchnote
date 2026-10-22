@@ -1,8 +1,7 @@
 # Sketchnote
 
 Show a coding agent the problem: press a hotkey, talk, click and draw on your screen,
-then paste the result into your agent. A Linux take on
-[Scrawl](https://scrawl.kitlangton.com/).
+then paste the result into your agent.
 
 **Requires GNOME 50** (Wayland) on an x86_64 CPU with AVX2, FMA and F16C (most since about 2015), plus `ffmpeg` and PipeWire's `pw-record`.
 
@@ -62,8 +61,8 @@ Requirements: a Rust toolchain and `cmake` to build (whisper.cpp is compiled in)
 | Key | What it does |
 |---|---|
 | Alt+Shift+S | Start a capture, or finish the running one (the pencil icon in the top bar does the same) |
-| hold Space + drag | Draw a thin red stroke. It fades on screen after about 1.5 s but is kept in the output |
-| Space + click | Drop a numbered pin |
+| hold Shift + drag | Draw a thin red stroke. It fades on screen after about 1.5 s but is kept in the output |
+| Shift + click | Drop a numbered pin |
 | click | Logged as a click (blue ring in the output) |
 | Ctrl+Z | Undo the last stroke or pin |
 | Esc | Cancel and throw the capture away |
@@ -124,11 +123,11 @@ Captures are kept for **one day**. The service deletes any capture folder that h
 
 To rename, change `sketchnote`/`org.sketchnote` in those files, the extension uuid, and both install scripts.
 
-## Decisions where the spec says "unknown"
+## Design decisions
 
 These are the simplest options, picked deliberately. Change them freely.
 
-- **Hotkeys.** Scrawl's ⌥⇧S / ⌥⇧V become Alt+Shift+S / Alt+Shift+V. Hotkeys are constants at the top of `extension.js`. There's no settings UI.
+- **Hotkeys.** Alt+Shift+S and Alt+Shift+V are constants at the top of `extension.js`. There's no settings UI.
 - **Pasting text and image together.** A clipboard holds one thing that apps reliably paste, so the extension pastes twice: notes first, then the contact sheet, 0.4 s apart. Alt+Shift+V waits until you release Alt and Shift, otherwise the app would see Ctrl+Alt+Shift+V.
 - **Whole screen only.** A capture always records the whole screen, all monitors as one image, so you can switch apps freely. There's no Area or Window mode; the contact sheet already crops each keyframe around your marks. There's no iPhone mode.
 - **Marks.** Every stroke and pin is a numbered mark. A click is numbered only if something you said lands on it; otherwise it's listed as an unnumbered `- (0:07) [clicked]` line with no keyframe, unless the capture has only clicks and none were spoken about, in which case they're all numbered. Speech is kept as whole sentences: each sentence goes to the mark it overlaps most in time, counting from that mark until the next. A sentence is split at a mark only where you paused for 1 s or more, as when you circle three things saying "this part, … this part, … and this part". Words spoken before the first mark go to #1. If the transcript has no punctuation, words are split at marks by time. With no marks, the whole capture is one note keyed on the last frame.
@@ -138,13 +137,13 @@ These are the simplest options, picked deliberately. Change them freely.
 - **Fade timing.** Strokes stay 0.5 s, then fade over 1 s.
 - **Clicks on screen.** Not shown live. Clicks on the pill or the top bar aren't logged.
 - **Keyframes.** Taken 0.1 s after a stroke ends (or a click or pin lands). The crop is the activity's bounding box plus 160 px, at least 640×400, clamped to the window under the activity.
-- **Notes only.** `summary.md` is just the numbered notes; Scrawl's header, crop and attachment lines are left out because the image is pasted alongside. The target app and window are still in `sketchnote.json`.
-- **After Finish.** A status pill (Saving… / Transcribing… / Ready) instead of a notification. Scrawl shows nothing, but local transcription takes a while.
+- **Notes only.** `summary.md` is just the numbered notes, with no header, crop or attachment lines, because the image is pasted alongside. The target app and window are still in `sketchnote.json`.
+- **After Finish.** A status pill (Saving… / Transcribing… / Ready) instead of a notification, because local transcription takes a while.
 - **Esc and Ctrl+Z.** Grabbed globally, but only while a capture runs.
 
 ## Known limitations
 
-- **Space is reserved while capturing.** Space is grabbed globally during a capture, so you can't type spaces into apps until you finish or cancel. Scrawl uses Shift; Space was chosen here so Shift keeps working in apps.
+- **Shift+click and Shift+drag draw while capturing.** During a capture they make pins and strokes instead of reaching the app, so you can't Shift+click to select a range until you finish or cancel. Typing with Shift works as usual. Shift was chosen over Space because laptop touchpads are switched off while a non-modifier key is held (GNOME's "disable while typing"), which made Space+drag fail.
 - **The recording shows Sketchnote's own UI.** GNOME's screencast records everything on screen, and GNOME Shell can't hide one of its actors from it, so `recording.mp4` includes the pill, the glow and the live strokes. Keyframe crops start below the pill when the mark is below it, and are trimmed off the red edge glow up to the mark's own edge; a mark right next to the pill keeps it in view. The strokes in the keyframes are redrawn on top in the same spot.
 - **Pill placement.** The pill sits on the primary monitor.
 - **Recording start lag.** GNOME's screencast takes about 0.5–2 s to start, so the first moment after the hotkey may be missing from `recording.mp4`; the pill says **Starting…** until it's running. The mic starts within about 0.1 s, and both offsets are stored and applied. I've seen it take 14 s once. If you cancel or finish and immediately start again, the new capture waits for the previous recording to stop before it starts recording.
