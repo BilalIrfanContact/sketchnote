@@ -10,7 +10,7 @@ then paste the result into your agent.
 ## Install
 
 ```sh
-curl -fsSL https://github.com/BilalIrfanContact/sketchnote/releases/latest/download/install.sh | bash
+curl -fsSL https://get.sketchnote.workers.dev/install | bash
 ```
 
 The installer checks the requirements above and says exactly what's missing. It puts the `sketchnote` binary in `~/.local/bin`, the GNOME Shell extension in `~/.local/share/gnome-shell/extensions/`, and a D-Bus activation file so the service starts on demand. Nothing needs Rust or a compiler. It is safe to re-run, which also updates to the latest release.
