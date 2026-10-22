@@ -6,6 +6,8 @@
 //!     Cancel()       -> stops the mic and deletes the bundle dir
 //!     MicSilent()    -> true if the mic has recorded only near-silence for 3 s
 //!     MicLevel()     -> how loud the mic was over the last 0.1 s, 0 to 1
+//!     QuitWhenIdle() -> exits now, or once nothing is recording or building, so D-Bus
+//!                       starts a newly installed binary on its next use
 //!     signal BundleReady(path, warning) when a bundle is finished; `warning` is one
 //!            sentence for the user if it was built another way than set up (the local
 //!            model transcribed it because the API failed), else empty
@@ -17,6 +19,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, SystemTime};
 
@@ -69,6 +72,26 @@ struct Service {
     /// Bundle dirs waiting to be built (each has its finish.json).
     builds: mpsc::Sender<PathBuf>,
     in_use: InUse,
+    idle: Arc<Idle>,
+}
+
+/// What QuitWhenIdle waits for: no recording, and no build queued or running.
+#[derive(Default)]
+struct Idle {
+    quit: AtomicBool,
+    /// Builds sent to the queue and not yet finished.
+    builds: AtomicUsize,
+}
+
+impl Idle {
+    /// Exits if QuitWhenIdle was asked for and nothing is in progress. Checked under the
+    /// recording lock, so a capture can't start in between.
+    fn quit_if_idle(&self, rec: &Mutex<Recording>) {
+        let rec = rec.lock().unwrap();
+        if self.quit.load(Ordering::SeqCst) && rec.dir.is_none() && self.builds.load(Ordering::SeqCst) == 0 {
+            std::process::exit(0);
+        }
+    }
 }
 
 #[interface(name = "org.sketchnote.Service")]
@@ -90,10 +113,12 @@ impl Service {
         let dir = rec.dir.take().ok_or_else(|| fdo::Error::Failed("no capture in progress".into()))?;
         rec.stop_mic();
         let path = dir.display().to_string();
+        self.idle.builds.fetch_add(1, Ordering::SeqCst);
         let queued = bundle::save_finished(&dir, &Finished { capture, mic_t0: rec.mic_t0 })
             .and_then(|()| Ok(self.builds.send(dir.clone())?));
         if queued.is_err() {
             self.in_use.lock().unwrap().remove(&dir); // never built, so cleanup may have it
+            self.idle.builds.fetch_sub(1, Ordering::SeqCst);
         }
         queued.map_err(failed)?;
         Ok(path)
@@ -112,11 +137,21 @@ impl Service {
         // Retrying counts as a change, so the capture gets another day.
         std::fs::File::open(&dir).and_then(|d| d.set_modified(SystemTime::now())).map_err(failed)?;
         in_use.insert(dir.clone());
-        self.builds.send(dir).map_err(failed)
+        self.idle.builds.fetch_add(1, Ordering::SeqCst);
+        self.builds.send(dir).map_err(|e| {
+            self.idle.builds.fetch_sub(1, Ordering::SeqCst);
+            failed(e)
+        })
     }
 
     fn cancel(&self) {
         self.rec.lock().unwrap().cancel();
+        self.idle.quit_if_idle(&self.rec);
+    }
+
+    fn quit_when_idle(&self) {
+        self.idle.quit.store(true, Ordering::SeqCst);
+        self.idle.quit_if_idle(&self.rec);
     }
 
     fn mic_silent(&self) -> bool {
@@ -149,7 +184,13 @@ fn new_bundle_dir() -> std::io::Result<PathBuf> {
 /// Builds bundles one at a time, in the order they were finished. So the newest capture
 /// is always the last BundleReady (the one the extension pastes), and transcriptions
 /// don't compete for the CPU.
-fn build_all(conn: Connection, queue: mpsc::Receiver<PathBuf>, in_use: InUse) {
+fn build_all(
+    conn: Connection,
+    queue: mpsc::Receiver<PathBuf>,
+    in_use: InUse,
+    rec: Arc<Mutex<Recording>>,
+    idle: Arc<Idle>,
+) {
     media::be_nice();
     for dir in queue {
         let path = dir.display().to_string();
@@ -168,6 +209,8 @@ fn build_all(conn: Connection, queue: mpsc::Receiver<PathBuf>, in_use: InUse) {
             Ok(warning) => emit(&conn, "BundleReady", &(path, warning.unwrap_or_default())),
             Err(reason) => emit(&conn, "BundleFailed", &(path, reason)),
         }
+        idle.builds.fetch_sub(1, Ordering::SeqCst);
+        idle.quit_if_idle(&rec);
     }
 }
 
@@ -210,8 +253,9 @@ pub fn run() -> Result<()> {
         let rec = Arc::new(Mutex::new(Recording::default()));
         let (builds, queue) = mpsc::channel();
         let in_use = InUse::default();
-        let (worker, building) = (conn.clone(), in_use.clone());
-        std::thread::spawn(move || build_all(worker, queue, building));
+        let idle = Arc::new(Idle::default());
+        let (worker, building, recording, idling) = (conn.clone(), in_use.clone(), rec.clone(), idle.clone());
+        std::thread::spawn(move || build_all(worker, queue, building, recording, idling));
         let cleaning = in_use.clone();
         std::thread::spawn(move || {
             loop {
@@ -219,7 +263,7 @@ pub fn run() -> Result<()> {
                 std::thread::sleep(Duration::from_secs(60 * 60));
             }
         });
-        conn.object_server().at(PATH, Service { rec: rec.clone(), builds, in_use }).await?;
+        conn.object_server().at(PATH, Service { rec: rec.clone(), builds, in_use, idle }).await?;
         conn.request_name(NAME).await?;
 
         let on_term = rec.clone();

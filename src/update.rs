@@ -1,7 +1,8 @@
 //! `sketchnote update`: replaces this install with the latest GitHub release, where
-//! install.sh put it. Everything is downloaded before anything is replaced, and the
-//! binary goes last, so a failed update leaves the old install whole. Models already on
-//! disk are kept, and the D-Bus file is left alone (it never changes).
+//! install.sh put it. The binary and extension are both downloaded before either is
+//! replaced; the old extension is kept aside until the new binary is in place, and put
+//! back if that fails. Then the new binary fetches any speech model it needs that isn't
+//! on disk yet, and the service is asked to quit once idle. The D-Bus file never changes.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -12,7 +13,7 @@ use std::process::Command;
 use anyhow::{Context, Result, ensure};
 
 use crate::fix::Fix;
-use crate::{config, setup, transcribe};
+use crate::setup;
 
 /// The release this binary was built from (the tag without its `v`), or "dev" when built
 /// from source.
@@ -23,19 +24,21 @@ pub const VERSION: &str = match option_env!("SKETCHNOTE_VERSION") {
 const REPO: &str = "BilalIrfanContact/sketchnote";
 
 pub fn run() -> Result<()> {
-    if VERSION == "dev" {
+    let Some(current) = parse_version(VERSION) else {
         Err(Fix(
             "This sketchnote was built from source, so it updates from git: git pull, then ./build-from-source.sh."
                 .into(),
-        ))?;
-    }
+        ))?
+    };
     let tag = latest_tag()?;
-    let latest = tag.trim_start_matches('v');
-    if !newer(latest, VERSION) {
+    let latest = parse_version(tag.trim_start_matches('v'))
+        .with_context(|| format!("the latest release's tag {tag} isn't a version like v1.2.3"))?;
+    if latest <= current {
         println!("Already up to date ({VERSION}).");
         return Ok(());
     }
-    println!("Updating {VERSION} → {latest}");
+    let new_version = tag.trim_start_matches('v');
+    println!("Updating {VERSION} → {new_version}");
     let url = |name: &str| format!("https://github.com/{REPO}/releases/download/{tag}/{name}");
 
     let exe = std::env::current_exe().context("finding this binary")?;
@@ -43,35 +46,46 @@ pub fn run() -> Result<()> {
     download(&url("sketchnote"), &new_exe)?;
     fs::set_permissions(&new_exe, fs::Permissions::from_mode(0o755))?;
 
-    let staging = crate::data_dir().join("update");
-    let _ = fs::remove_dir_all(&staging);
-    let new_ext = staging.join(setup::UUID);
+    // Staged and swapped beside the installed extension, so the renames stay on one disk.
+    let ext = extension_dir();
+    let (new_ext, old_ext) = (ext.with_file_name(".sketchnote-new"), ext.with_file_name(".sketchnote-old"));
+    let _ = fs::remove_dir_all(&new_ext);
     fs::create_dir_all(&new_ext)?;
-    let tarball = staging.join("extension.tar.gz");
+    let tarball = new_ext.join("extension.tar.gz");
     download(&url("sketchnote-extension.tar.gz"), &tarball)?;
     let unpacked = Command::new("tar").arg("-xzf").arg(&tarball).arg("-C").arg(&new_ext).status()?;
+    fs::remove_file(&tarball)?;
     ensure!(unpacked.success(), "unpacking the extension failed");
 
-    let ext = extension_dir();
     let relogin = files(&new_ext) != files(&ext);
     if relogin {
-        let _ = fs::remove_dir_all(&ext);
-        fs::create_dir_all(ext.parent().unwrap())?;
-        fs::rename(&new_ext, &ext).with_context(|| format!("installing the extension in {}", ext.display()))?;
+        let _ = fs::remove_dir_all(&old_ext);
+        if ext.exists() {
+            fs::rename(&ext, &old_ext)?;
+        }
+        if let Err(e) = fs::rename(&new_ext, &ext) {
+            let _ = fs::rename(&old_ext, &ext);
+            return Err(e).with_context(|| format!("installing the extension in {}", ext.display()));
+        }
     }
-    let _ = fs::remove_dir_all(&staging);
-    // A rename, so the running service keeps its old copy until it's restarted below.
-    fs::rename(&new_exe, &exe).with_context(|| format!("replacing {}", exe.display()))?;
+    // A rename, so the running service keeps its old copy until it quits.
+    if let Err(e) = fs::rename(&new_exe, &exe) {
+        if relogin {
+            let _ = fs::remove_dir_all(&ext);
+            let _ = fs::rename(&old_ext, &ext);
+        }
+        return Err(e).with_context(|| format!("replacing {}", exe.display()));
+    }
+    let _ = fs::remove_dir_all(&old_ext);
+    let _ = fs::remove_dir_all(&new_ext);
 
-    // Only models missing on disk are downloaded (say, if a release changed the default).
-    if let Err(e) = config::load().and_then(|c| transcribe::download(&transcribe::Model::parse(&c.local.model)?)) {
-        eprintln!("Couldn't check the speech models ({e:#}). Run `sketchnote setup` to fix it.");
-    }
-    restart_service();
-    println!("Updated to {latest}.");
+    let models = Command::new(&exe).arg("download-model").status().is_ok_and(|s| s.success());
+    quit_service_when_idle();
+    println!("Updated to {new_version}.");
     if relogin {
         println!("The extension changed: log out and back in once to load it.");
     }
+    ensure!(models, "the speech model couldn't be downloaded. Run `sketchnote download-model` to try again.");
     Ok(())
 }
 
@@ -97,10 +111,10 @@ fn download(url: &str, to: &Path) -> Result<()> {
     Ok(())
 }
 
-/// True if version `a` (like "0.0.2") is newer than `b`.
-fn newer(a: &str, b: &str) -> bool {
-    let parts = |v: &str| v.split('.').map(|n| n.parse::<u64>().unwrap_or(0)).collect::<Vec<_>>();
-    parts(a) > parts(b)
+/// `[1, 2, 3]` from "1.2.3"; None for anything else (like "dev" or "1.2.3-rc1").
+fn parse_version(v: &str) -> Option<[u64; 3]> {
+    let parts: Vec<u64> = v.split('.').map(|n| n.parse().ok()).collect::<Option<_>>()?;
+    parts.try_into().ok()
 }
 
 fn extension_dir() -> PathBuf {
@@ -113,12 +127,14 @@ fn files(dir: &Path) -> BTreeMap<std::ffi::OsString, Vec<u8>> {
     entries.flatten().filter_map(|e| Some((e.file_name(), fs::read(e.path()).ok()?))).collect()
 }
 
-/// Stops the service so D-Bus starts the new binary on demand, unless it's recording.
-fn restart_service() {
-    let recording = Command::new("pgrep").args(["-x", "pw-record"]).status().is_ok_and(|s| s.success());
-    if !recording {
-        let _ = Command::new("pkill").args(["-f", "/sketchnote service$"]).status();
-    }
+/// Asks the running service to quit once nothing is recording or building, so D-Bus
+/// starts the new binary on its next use. (If none is running, this starts the new one,
+/// which quits at once.)
+fn quit_service_when_idle() {
+    let _ = Command::new("gdbus")
+        .args(["call", "--session", "--dest", "org.sketchnote.Service", "--object-path", "/org/sketchnote/Service"])
+        .args(["--method", "org.sketchnote.Service.QuitWhenIdle"])
+        .output();
 }
 
 #[cfg(test)]
@@ -126,10 +142,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn versions_compare_by_number() {
-        assert!(newer("0.0.2", "0.0.1"));
-        assert!(newer("0.10.0", "0.9.9"));
-        assert!(!newer("0.0.2", "0.0.2"));
-        assert!(!newer("0.0.1", "0.0.2"));
+    fn only_plain_versions_compare_and_by_number() {
+        let v = |s| parse_version(s).unwrap();
+        assert!(v("0.0.2") > v("0.0.1"));
+        assert!(v("0.10.0") > v("0.9.9"));
+        assert!(v("0.0.2") <= v("0.0.2"));
+        for odd in ["dev", "0.0.2+build.1", "1.2.3-rc1", "1.2", "1.2.3.4"] {
+            assert_eq!(parse_version(odd), None, "{odd}");
+        }
     }
 }
