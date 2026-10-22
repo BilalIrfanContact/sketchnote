@@ -102,7 +102,7 @@ pub fn speech(wav: &Path) -> Result<Vec<(f64, f64)>> {
     let audio = read_wav(wav)?;
     let vad = models_dir().join(VAD_MODEL);
     if !vad.exists() {
-        Err(Fix("The voice detector model is missing. Run install.sh again to download it, then retry.".into()))?;
+        Err(Fix("The voice detector model is missing. Run `sketchnote download-model` to download it, then retry.".into()))?;
     }
     whisper_rs::install_logging_hooks();
     let mut ctx = WhisperVadContext::new(vad.to_str().context("VAD model path")?, WhisperVadContextParams::new())?;
@@ -139,7 +139,7 @@ pub fn words(wav: &Path, model: &Model) -> Result<Vec<Word>> {
     let vad = models_dir().join(VAD_MODEL);
     if !model.file().exists() || !vad.exists() {
         Err(Fix(format!(
-            "The speech model {} isn't downloaded yet. Run install.sh again to download it, then retry.",
+            "The speech model {} isn't downloaded yet. Run `sketchnote download-model` to download it, then retry.",
             model.name
         )))?;
     }

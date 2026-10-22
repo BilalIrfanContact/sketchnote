@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Install Sketchnote for the current user (GNOME 50, Wayland). Safe to re-run.
+# Build Sketchnote from this checkout and install it for the current user (GNOME 50,
+# Wayland). For developers; users install a release with install.sh. Safe to re-run.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
