@@ -29,7 +29,7 @@ Transcription runs on your CPU with a whisper.cpp model. To use another one, cre
 model = "large-v3-turbo-q8_0"
 ```
 
-then run `./target/release/sketchnote download-model` (or `./build-from-source.sh` again) to download it. The next capture uses it; nothing needs restarting. Names are a size (`tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`), optionally `.en` for an English-only model and `-q5_0`/`-q5_1`/`-q8_0` for a smaller file, as listed on [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main). Bigger models hear you better and take longer: on a laptop CPU, 30 s of speech took 2 s with `tiny-q8_0` and 26 s with the default `small-q8_0`.
+then run `sketchnote download-model` to download it. The next capture uses it; nothing needs restarting. Names are a size (`tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`), optionally `.en` for an English-only model and `-q5_0`/`-q5_1`/`-q8_0` for a smaller file, as listed on [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main). Bigger models hear you better and take longer: on a laptop CPU, 30 s of speech took 2 s with `tiny-q8_0` and 26 s with the default `small-q8_0`.
 
 ### Transcribing through an API instead
 
@@ -51,7 +51,7 @@ model = "whisper-large-v3-turbo"
 
 APIs tend to stretch each word over the silence around it, which would hide the pauses Sketchnote uses to split a sentence between the things you circled. So the returned words are re-timed on your machine against the speech the local voice detector finds in the recording.
 
-Then run `./target/release/sketchnote set-key` and paste your API key. It's stored in your desktop keyring (GNOME Keyring), one per `url`, never in the config file; leave it empty to remove it. If the API fails for any reason (no internet, a rejected key, no credit left, an outage), the model on your machine transcribes the capture instead, so you still get your notes. The pill then says "Ready (local model)", a notification says what went wrong with the API, and its Retry transcribes through the API again once you've fixed it. If the local model fails too, the notification gives the API's reason. `transcriber = "local"` (or no line at all) goes back to the model on your machine.
+Then run `sketchnote set-key` and paste your API key. It's stored in your desktop keyring (GNOME Keyring), one per `url`, never in the config file; leave it empty to remove it. If the API fails for any reason (no internet, a rejected key, no credit left, an outage), the model on your machine transcribes the capture instead, so you still get your notes. The pill then says "Ready (local model)", a notification says what went wrong with the API, and its Retry transcribes through the API again once you've fixed it. If the local model fails too, the notification gives the API's reason. `transcriber = "local"` (or no line at all) goes back to the model on your machine.
 
 Requirements: a Rust toolchain and `cmake` to build (whisper.cpp is compiled in), plus `ffmpeg` (with libx264), `pw-record` and `notify-send`, which Ubuntu with GNOME 50 already has.
 
@@ -77,7 +77,7 @@ Starting a capture starts the microphone at once and the screen recorder within 
 
 After Finish, the pill stays up with an amber dot: **Saving…**, then **Transcribing…** (about 10 s for 20 s of speech on CPU). It turns green with **Ready · Ctrl+V to paste** when the notes are on the clipboard, then hides after a few seconds. If building fails, the pill says so and a notification gives the reason in plain words (say, the speech model is missing) with a **Retry** button. The recordings are kept, so Retry builds the same capture again once you've fixed the cause. The notification stays in the message tray until you dismiss it. Press Ctrl+V in your agent's input box: the extension pastes the notes, swaps the clipboard to the contact sheet and pastes again, so you get the text and the image from one key press. Each is an ordinary paste, so this works in any app that accepts pasted text and images. Once you copy something else, Ctrl+V is normal again; Alt+Shift+V pastes the latest capture whenever you want it back.
 
-CLI: `target/release/sketchnote latest | service | transcribe file.wav`.
+CLI: `sketchnote latest | service | transcribe file.wav | download-model | set-key` (from a source build, `target/release/sketchnote`).
 
 ## Output
 

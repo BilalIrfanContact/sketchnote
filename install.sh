@@ -19,7 +19,7 @@ DBUS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/dbus-1/services"
 # The install command for `debian fedora arch` packages, for this distro.
 install_cmd() {
     local id
-    id=$(. /etc/os-release 2>/dev/null; echo "$ID $ID_LIKE")
+    id=$(. /etc/os-release 2>/dev/null; echo "${ID:-} ${ID_LIKE:-}")   # ID_LIKE is optional
     case "$id" in
         *debian*|*ubuntu*) echo "sudo apt install $1" ;;
         *fedora*) echo "sudo dnf install $2" ;;
