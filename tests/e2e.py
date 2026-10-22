@@ -174,7 +174,7 @@ def main():
                                        '--wayland-display', DISPLAY], stdout=log, stderr=log))
         wait_for(lambda: call('org.gnome.Shell', '/org/gnome/Shell',
                               'org.gnome.Shell.Extensions', 'GetExtensionInfo',
-                              GLib.Variant('(s)', ('sketchnote@local',)))[0]['state'] == 1,
+                              GLib.Variant('(s)', ('sketchnote@local',)))[0].get('state') == 1,
                  'extension to be active')
         print('shell up, extension active')
 

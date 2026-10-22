@@ -670,7 +670,7 @@ export default class Sketchnote extends Extension {
         const ui = {glows: []};
         ui.ink = new Ink();
         Main.uiGroup.add_child(ui.ink.actor);
-        // Takes pointer input only while Shift is held, so normal clicks reach apps.
+        // Takes input only while Shift is held, so normal clicks reach apps.
         ui.catcher = new St.Widget({reactive: false, x: 0, y: 0,
             width: global.stage.width, height: global.stage.height});
         ui.catcher.connect('event', (_a, event) => this._onDrawEvent(event));
@@ -759,19 +759,21 @@ export default class Sketchnote extends Extension {
 
     // --- input ---------------------------------------------------------------
 
-    // Makes the catcher take the pointer while Shift is held, and logs plain clicks anywhere.
-    // Shift only makes the catcher reactive, without a grab, so keys still reach the focused
-    // app (capital letters keep typing). The stage grab is taken only during a stroke, so the
-    // drag stays ours even if Shift is let go before the button.
+    // Switches the catcher on/off while Shift is held and logs plain clicks anywhere.
+    // A stage grab routes the pointer to the catcher immediately; just flipping `reactive`
+    // would only take effect after the next repaint, and a quick Shift+click would miss.
+    // The grab also holds keys, so text typed with Shift doesn't reach apps meanwhile.
     _poll() {
         const [x, y, mods] = global.get_pointer();
         const down = (mods & Clutter.ModifierType.BUTTON1_MASK) !== 0;
         const shift = (mods & Clutter.ModifierType.SHIFT_MASK) !== 0;
-        this._ui.catcher.reactive = shift || this._stroke !== null;
-        if (this._stroke && !this._grab)
+        const draw = shift || this._stroke !== null;
+        if (draw && !this._grab) {
+            this._ui.catcher.reactive = true;
             this._grab = global.stage.grab(this._ui.catcher);
-        else if (!this._stroke && this._grab)
+        } else if (!draw && this._grab) {
             this._releaseGrab();
+        }
         if (down && !this._wasDown && !shift && !this._stroke &&
             !inside(this._ui.pill.actor, x, y) && !inside(Main.panel, x, y))
             this._addEvent({type: 'click', x, y});
@@ -781,12 +783,11 @@ export default class Sketchnote extends Extension {
     _onDrawEvent(event) {
         const type = event.type();
         if (type === Clutter.EventType.KEY_PRESS || type === Clutter.EventType.KEY_RELEASE)
-            return Clutter.EVENT_PROPAGATE;
+            return Clutter.EVENT_STOP;      // keys typed with Shift held: keep them from apps
         const [x, y] = event.get_coords();
         if (type === Clutter.EventType.BUTTON_PRESS && event.get_button() === 1) {
             this._stroke = {points: [[x, y]], doneAt: null, t: this._elapsed()};
             this._ui.ink.items.push(this._stroke);
-            this._poll();       // take the grab now, before the first motion event
             return Clutter.EVENT_STOP;
         }
         if (type === Clutter.EventType.MOTION && this._stroke) {
@@ -824,6 +825,8 @@ export default class Sketchnote extends Extension {
     _releaseGrab() {
         this._grab?.dismiss();
         this._grab = null;
+        if (this._ui)
+            this._ui.catcher.reactive = false;
     }
 
     _addEvent(event, wx = event.x, wy = event.y) {
