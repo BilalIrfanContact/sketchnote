@@ -16,6 +16,8 @@ The installer checks the requirements above and says exactly what's missing. It 
 
 Then run `sketchnote setup`. It downloads the speech model (Whisper `small`, 264 MB) and a voice detector, checks your mic, asks whether to transcribe on your computer or through an API (and takes the key), and says what gets recorded. It's safe to re-run. Then **log out and back in once**: GNOME on Wayland only discovers new extensions at login.
 
+To update later, run `sketchnote update`. It installs the latest release if it's newer, keeps the models you've already downloaded, and says if the extension changed and needs a re-login.
+
 ### Building from source
 
 For working on Sketchnote: `./build-from-source.sh` builds the binary with cargo (needs Rust and cmake, and whisper.cpp takes minutes to compile), downloads the speech model (Whisper `small`, 264 MB, unless you've picked another) and a voice detector into `~/.local/share/sketchnote/models/`, symlinks `extension/sketchnote@local` into the extensions folder, and writes the D-Bus file. Safe to re-run.

@@ -6,6 +6,7 @@
 //!     sketchnote download-model    download the speech model set in config.toml, if missing
 //!     sketchnote set-key           store the API key for the [api] url in config.toml
 //!     sketchnote setup             first-run checks and choices, after install.sh
+//!     sketchnote update            install the latest release, if it's newer
 
 mod api;
 mod bundle;
@@ -19,6 +20,7 @@ mod notes;
 mod service;
 mod setup;
 mod transcribe;
+mod update;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -96,9 +98,12 @@ fn main() -> ExitCode {
         }),
         ["download-model"] => configured_model().and_then(|model| transcribe::download(&model)),
         ["setup"] => setup::run(),
+        ["update"] => update::run(),
         ["set-key"] => config::load().and_then(|config| key::set_interactively(&config.api.url)),
         _ => {
-            eprintln!("usage: sketchnote service | latest | transcribe WAV | download-model | set-key | setup");
+            eprintln!(
+                "usage: sketchnote service | latest | transcribe WAV | download-model | set-key | setup | update"
+            );
             return ExitCode::from(2);
         }
     };
