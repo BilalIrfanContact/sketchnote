@@ -8,13 +8,14 @@ body{margin:0}.iso-page{max-width:1180px} .sn-stage{position:relative}.sn-stage 
 .sn-tour-page .sn-panel,.sn-tour-page .iso-legend,.sn-tour-page .iso-caption{display:none}
 .sn-tour-page .sn-stage{margin:0;pointer-events:none}
 .sn-tour-page .sn-part{filter:none;outline:none}
-.sn-tour-page .sn-part.is-lit{filter:drop-shadow(0 0 3px #ca493c)}
-.sn-callout{font-family:system-ui,sans-serif;pointer-events:none}
-.sn-leader-under{fill:none;stroke:var(--anatomy-card);stroke-width:5}
-.sn-leader{fill:none;stroke:#bb5145;stroke-width:1.5;stroke-linejoin:round}
-.sn-anchor{fill:var(--anatomy-card);stroke:#bb5145;stroke-width:2}
-.sn-label rect{fill:var(--anatomy-card);stroke:var(--anatomy-mid);stroke-width:.8}
-.sn-stop-number{fill:#bb5145;font-size:16px;font-variant-numeric:tabular-nums}
-.sn-label-title{fill:var(--anatomy-text);font-size:23px;font-weight:600}
-.sn-label-detail{fill:var(--anatomy-text);font-size:17px}
+.sn-tour-page .sn-part.is-lit{filter:url(#sn-lit)}
+.sn-callout,.sn-progress{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;pointer-events:none}
+.sn-leader{fill:none;stroke:#e5322c;stroke-width:1.6;stroke-linecap:round}
+.sn-dot{fill:#ff3030;stroke:#fff;stroke-width:2}
+.sn-ring{fill:none;stroke:#ff3030;stroke-width:1.5}
+.sn-card-box{fill:#fff;stroke:#e6e3df;stroke-width:1}
+.sn-card-num{fill:#e5322c;font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.sn-card-title{fill:#1d1c1b;font-size:19px;font-weight:650}
+.sn-card-detail{fill:#6b6763;font-size:14.5px}
+.sn-progress circle{fill:#d9d5d0}.sn-progress circle.is-done{fill:#f0a19c}.sn-progress circle.is-now{fill:#ff3030}
 </style>
