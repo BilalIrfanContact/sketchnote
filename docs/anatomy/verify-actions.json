@@ -1,0 +1,1 @@
+[["click", ".sn-play"], ["click", "[data-mode=\"fail\"]"], ["click", "[data-go=\"build\"]"], ["click", ".sn-play"], ["wait", 4300], ["shot", "docs/anatomy/shots/fallback.png"], ["click", ".sn-play"], ["shot", "docs/anatomy/shots/close-dark.png", ".sn-stage", 4], ["eval", "document.body.dataset.theme='light'"], ["shot", "docs/anatomy/shots/close-light.png", ".sn-stage", 4]]

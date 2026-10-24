@@ -1,0 +1,556 @@
+[
+  {
+    "id": "start",
+    "label": "Start",
+    "dur": 3.2,
+    "text": "Alt+Shift+S. The extension calls Start() over D-Bus; if the service isn't running, D-Bus starts it. The service makes the bundle folder and starts pw-record within about 0.1 s, then the extension asks GNOME's Screencast to film, which takes 0.5–2 s.",
+    "keys": [
+      [
+        "alt",
+        0.1,
+        0.7
+      ],
+      [
+        "shift",
+        0.1,
+        0.7
+      ],
+      [
+        "s",
+        0.15,
+        0.6
+      ]
+    ],
+    "pulses": [
+      [
+        0.2,
+        1.2,
+        "out"
+      ]
+    ],
+    "pill": [
+      [
+        0.3,
+        "starting",
+        "Starting…"
+      ]
+    ],
+    "lit": [
+      [
+        "director",
+        0,
+        0.7
+      ],
+      [
+        "dbus",
+        0.2,
+        1.2
+      ],
+      [
+        "service",
+        1.0,
+        3.2
+      ],
+      [
+        "mic",
+        1.3,
+        3.2
+      ],
+      [
+        "camera",
+        1.8,
+        3.2
+      ]
+    ],
+    "say": [
+      [
+        0,
+        "Alt+Shift+S · Start() over D-Bus"
+      ],
+      [
+        1.0,
+        "D-Bus starts the service on demand · pw-record starts the mic"
+      ],
+      [
+        1.8,
+        "GNOME's Screencast is starting (0.5–2 s)"
+      ]
+    ]
+  },
+  {
+    "id": "record",
+    "label": "Record",
+    "dur": 3.4,
+    "text": "Recording: GNOME films the whole screen, pw-record writes audio.wav. The pill shows the timer and a level bar the extension polls from the service (MicLevel) every 0.1 s, plus \"Mic is silent\" if the last 3 s were near digital silence.",
+    "pill": [
+      [
+        0,
+        "recording",
+        "Recording"
+      ]
+    ],
+    "polls": [
+      0.3,
+      0.8
+    ],
+    "lit": [
+      [
+        "camera",
+        0,
+        3.4
+      ],
+      [
+        "mic",
+        0,
+        3.4
+      ],
+      [
+        "screen",
+        0,
+        3.4
+      ]
+    ],
+    "say": [
+      [
+        0,
+        "Recording · whole screen and mic"
+      ],
+      [
+        1.4,
+        "The pill's level bar polls MicLevel over D-Bus"
+      ]
+    ]
+  },
+  {
+    "id": "draw",
+    "label": "Draw",
+    "dur": 4.4,
+    "text": "Hold Shift and drag to draw; Shift+click drops a pin; plain clicks are logged but not shown. Strokes and pins stay 0.5 s, then fade over 1 s on screen, but they're kept in the output. Every stroke and pin becomes a numbered mark.",
+    "keys": [
+      [
+        "shift",
+        0.15,
+        2.0
+      ],
+      [
+        "shift",
+        2.75,
+        2.95
+      ]
+    ],
+    "ink": {
+      "draw": [
+        0.2,
+        1.8
+      ],
+      "pin": 2.8
+    },
+    "pill": [
+      [
+        0,
+        "recording",
+        "Recording"
+      ]
+    ],
+    "lit": [
+      [
+        "director",
+        0,
+        3.2
+      ],
+      [
+        "screen",
+        0,
+        4.4
+      ]
+    ],
+    "say": [
+      [
+        0,
+        "Hold Shift and drag · live ink"
+      ],
+      [
+        1.8,
+        "Strokes fade on screen after 1.5 s, but are kept"
+      ],
+      [
+        2.75,
+        "Shift+click · a pin"
+      ]
+    ]
+  },
+  {
+    "id": "finish",
+    "label": "Finish",
+    "dur": 2.8,
+    "text": "Alt+Shift+S again. GNOME stops filming, and the extension sends Finish(json): timings, strokes, pins, clicks, the pill's position and the window under them. The service stops the mic, writes finish.json and queues the bundle.",
+    "keys": [
+      [
+        "alt",
+        0.1,
+        0.7
+      ],
+      [
+        "shift",
+        0.1,
+        0.7
+      ],
+      [
+        "s",
+        0.15,
+        0.6
+      ]
+    ],
+    "pulses": [
+      [
+        0.5,
+        1.5,
+        "out"
+      ]
+    ],
+    "pill": [
+      [
+        0.4,
+        "busy",
+        "Saving…"
+      ],
+      [
+        1.9,
+        "busy",
+        "Transcribing…"
+      ]
+    ],
+    "lit": [
+      [
+        "director",
+        0,
+        0.7
+      ],
+      [
+        "dbus",
+        0.5,
+        1.5
+      ],
+      [
+        "b-finish",
+        1.6,
+        2.8
+      ],
+      [
+        "service",
+        1.5,
+        2.8
+      ]
+    ],
+    "say": [
+      [
+        0,
+        "Alt+Shift+S · GNOME stops filming"
+      ],
+      [
+        0.5,
+        "Finish(json) · the events, pill and target window"
+      ],
+      [
+        1.6,
+        "finish.json saved · queued to build"
+      ]
+    ]
+  },
+  {
+    "id": "build",
+    "label": "Build",
+    "dur": 6.4,
+    "text": "The editing room builds one bundle at a time: ffmpeg converts the footage and pulls a still per mark, the speech is transcribed with a timestamp per word, and the notes are made by giving each sentence to the mark it overlaps most in time.",
+    "pill": [
+      [
+        0,
+        "busy",
+        "Transcribing…"
+      ]
+    ],
+    "lit": [
+      [
+        "ffmpeg",
+        0,
+        2.0
+      ],
+      [
+        "b-mp4",
+        1.8,
+        2.6
+      ],
+      [
+        "b-frames",
+        4.8,
+        5.2
+      ],
+      [
+        "whisper",
+        2.4,
+        5.0,
+        "local"
+      ],
+      [
+        "vad",
+        2.4,
+        5.0,
+        "local"
+      ],
+      [
+        "api",
+        2.4,
+        4.0,
+        "api"
+      ],
+      [
+        "keyring",
+        2.4,
+        3.0,
+        "api"
+      ],
+      [
+        "vad",
+        4.0,
+        5.0,
+        "api"
+      ],
+      [
+        "api",
+        2.4,
+        3.6,
+        "fail"
+      ],
+      [
+        "keyring",
+        2.4,
+        3.0,
+        "fail"
+      ],
+      [
+        "whisper",
+        3.6,
+        5.0,
+        "fail"
+      ],
+      [
+        "vad",
+        3.6,
+        5.0,
+        "fail"
+      ],
+      [
+        "b-summary",
+        5.0,
+        6.4
+      ],
+      [
+        "b-sheet",
+        5.3,
+        6.4
+      ],
+      [
+        "b-json",
+        5.5,
+        6.4
+      ],
+      [
+        "ffmpeg",
+        4.8,
+        5.2
+      ]
+    ],
+    "say": [
+      [
+        0,
+        "ffmpeg · raw footage → recording.mp4"
+      ],
+      [
+        2.4,
+        "Whisper writes each word and the second it was said",
+        "local"
+      ],
+      [
+        2.4,
+        "Only audio.wav goes to the API",
+        "api"
+      ],
+      [
+        2.4,
+        "Only audio.wav goes to the API…",
+        "fail"
+      ],
+      [
+        3.0,
+        "…and the call fails",
+        "fail"
+      ],
+      [
+        3.4,
+        "Words come back with sloppy timings",
+        "api"
+      ],
+      [
+        3.6,
+        "So the local model transcribes it instead",
+        "fail"
+      ],
+      [
+        4.0,
+        "Re-timed locally against the voice detector",
+        "api"
+      ],
+      [
+        4.8,
+        "ffmpeg pulls the stills for the numbered marks"
+      ],
+      [
+        5.0,
+        "summary.md, contact-sheet.png, sketchnote.json"
+      ]
+    ]
+  },
+  {
+    "id": "ready",
+    "label": "Ready",
+    "dur": 3.0,
+    "text": "The service signals BundleReady(path, warning). The extension puts the notes on the clipboard and takes over Ctrl+V. If the API failed, the warning says why: the pill says Ready (local model) and a notification offers Retry.",
+    "pulses": [
+      [
+        0,
+        1.1,
+        "in"
+      ]
+    ],
+    "pill": [
+      [
+        1.1,
+        "ready",
+        "Ready · Ctrl+V to paste"
+      ]
+    ],
+    "lit": [
+      [
+        "dbus",
+        0,
+        1.1
+      ],
+      [
+        "director",
+        1.0,
+        3.0
+      ],
+      [
+        "clipboard",
+        1.1,
+        3.0
+      ],
+      [
+        "screen",
+        1.1,
+        3.0,
+        "fail"
+      ]
+    ],
+    "say": [
+      [
+        0,
+        "BundleReady(path, warning) over D-Bus"
+      ],
+      [
+        1.1,
+        "Notes on the clipboard · Ctrl+V is Sketchnote's"
+      ],
+      [
+        1.1,
+        "Warning: the API failed, so the local model stood in",
+        "fail"
+      ]
+    ]
+  },
+  {
+    "id": "paste",
+    "label": "Paste",
+    "dur": 3.4,
+    "text": "One Ctrl+V, two deliveries. The extension types Ctrl+V with the notes on the clipboard, swaps in contact-sheet.png and types Ctrl+V again, then puts the notes back. Each is an ordinary paste, the target app must accept text and image pastes.",
+    "keys": [
+      [
+        "ctrl",
+        0.2,
+        0.6
+      ],
+      [
+        "v",
+        0.25,
+        0.55
+      ],
+      [
+        "ctrl",
+        1.0,
+        1.25
+      ],
+      [
+        "v",
+        1.02,
+        1.22
+      ]
+    ],
+    "pill": [
+      [
+        0,
+        "ready",
+        "Ready · Ctrl+V to paste"
+      ],
+      [
+        0.25,
+        "hidden",
+        ""
+      ]
+    ],
+    "sheet": [
+      [
+        0,
+        "notes"
+      ],
+      [
+        0.9,
+        "photo"
+      ],
+      [
+        1.8,
+        "notes"
+      ]
+    ],
+    "lit": [
+      [
+        "clipboard",
+        0,
+        3.4
+      ],
+      [
+        "director",
+        0.2,
+        1.3
+      ],
+      [
+        "screen",
+        0.5,
+        3.4
+      ]
+    ],
+    "say": [
+      [
+        0.2,
+        "Ctrl+V · the notes paste first"
+      ],
+      [
+        0.9,
+        "contact-sheet.png swapped in · Ctrl+V again"
+      ],
+      [
+        1.8,
+        "Notes back on the clipboard · Alt+Shift+V any time"
+      ]
+    ]
+  }
+]

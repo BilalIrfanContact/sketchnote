@@ -1,0 +1,102 @@
+{
+  "screen": {
+    "name": "Your screen",
+    "role": "the set",
+    "text": "Everything here gets filmed: the whole screen, every monitor as one image. The red glow round the edges, the status pill at top centre and the live ink are drawn by the extension, so they show up in recording.mp4 too. Clicks aren't shown live, only logged."
+  },
+  "director": {
+    "name": "GNOME Shell extension",
+    "role": "the director on set",
+    "text": "extension.js, GJS running inside GNOME Shell. It owns the hotkeys (Alt+Shift+S start/finish, hold Shift and drag to draw, Shift+click for a pin, Ctrl+Z undo, Esc cancel), the edge glow, the pill, live ink and pins, and logs clicks by polling every 10 ms. It asks GNOME's Screencast to film the screen, and once the bundle is ready it makes the next Ctrl+V paste it. Living inside the Shell is what avoids portal prompts and lets it draw over apps and type the paste."
+  },
+  "clipboard": {
+    "name": "The paste",
+    "role": "one Ctrl+V, two deliveries",
+    "text": "On BundleReady the extension puts summary.md on the clipboard and grabs Ctrl+V. When pressed, it types Ctrl+V for the app with the notes, swaps contact-sheet.png onto the clipboard, types Ctrl+V again (each paste gets 0.4 s to land), then puts the notes back for another go. Copy anything else and Ctrl+V is normal again; Alt+Shift+V pastes the latest capture any time."
+  },
+  "dbus": {
+    "name": "D-Bus · org.sketchnote.Service",
+    "role": "the walkie-talkie",
+    "text": "The only line between the two halves. The extension calls Start, Finish(json), Cancel and Retry(dir), and polls MicLevel and MicSilent for the pill. The service answers with two signals: BundleReady(path, warning) and BundleFailed(path, reason). If the service isn't running, the first call makes D-Bus start it."
+  },
+  "camera": {
+    "name": "GNOME Shell Screencast",
+    "role": "GNOME's own camera",
+    "text": "The extension asks org.gnome.Shell.Screencast to record the whole screen into the bundle folder. Only the Shell may call it, which is why there's no portal prompt and why the recording code lives in the extension. It takes about 0.5–2 s to start (the pill says Starting…), and writes raw footage that the film lab converts."
+  },
+  "mic": {
+    "name": "pw-record (PipeWire)",
+    "role": "the sound recordist",
+    "text": "The service starts pw-record on Start, within about 0.1 s: 16 kHz mono into audio.wav. The service reads the last 0.1 s of that file for the pill's level bar (a fixed −60 to 0 dBFS scale) and the last 3 s for \"Mic is silent\". It comes from your distro, not from Sketchnote."
+  },
+  "service": {
+    "name": "sketchnote service",
+    "role": "the editing room in the back",
+    "text": "The Rust binary run as `sketchnote service`, started on demand by D-Bus (the lamp). It records the mic, and on Finish saves finish.json and queues the capture. Bundles are built one at a time in finish order, at nice 10, with transcription on half the cores, so the desktop stays responsive. It deletes captures that haven't changed in a day, checking hourly."
+  },
+  "ffmpeg": {
+    "name": "ffmpeg",
+    "role": "the film lab",
+    "text": "Converts GNOME's raw recording into recording.mp4 (H.264, 30 fps) and deletes the original, then pulls the exact still frame for each mark (the enlarger). The service burns the strokes, pins and clicks into each still, crops it to the activity and lays out the contact sheet. ffmpeg comes from your distro."
+  },
+  "whisper": {
+    "name": "Speech model · whisper.cpp",
+    "role": "the stenographer with a stopwatch",
+    "text": "Whisper small q8_0 (264 MB, ~/.local/share/sketchnote/models/) runs in-process through whisper-rs on the CPU, English only, on half the cores: roughly 0.5× real time. DTW timestamps give each word the second it was said, and that timing is what attaches each sentence to the circle drawn at that moment. A bigger model is a config.toml line away."
+  },
+  "vad": {
+    "name": "Voice detector · Silero",
+    "role": "the assistant who marks the silences",
+    "text": "Silero v5, under 1 MB. It finds the stretches of speech: Whisper skips the silences so it doesn't invent words there, a sentence is split between two marks only at a pause of 1 s or more, and words an API stretched over the silence are moved back onto the speech they belong to."
+  },
+  "api": {
+    "name": "Transcription API (optional)",
+    "role": "an outside, faster stenographer",
+    "text": "Groq by default, or any OpenAI-compatible server whose model returns word timings. Only audio.wav leaves the machine; the screen recording and images never do. Its word timings are sloppy, so they're re-timed locally against the voice detector. If the call fails (no internet, a bad key, no credit), the local model transcribes instead."
+  },
+  "keyring": {
+    "name": "GNOME Keyring",
+    "role": "where the API key lives",
+    "text": "sketchnote set-key, or setup when you pick the API, stores the key in the desktop keyring, one per API url, never in config.toml. Leaving it empty removes it."
+  },
+  "bundle": {
+    "name": "The bundle",
+    "role": "the delivery box",
+    "text": "~/.local/share/sketchnote/captures/<timestamp>.bundle/. The service deletes it once it hasn't changed for a day (the 24h tag); Cancel deletes it at once. Inside: the notes, the contact sheet, both raw tapes, the stills, the production log and the work order."
+  },
+  "b-finish": {
+    "name": "finish.json",
+    "role": "the work order",
+    "text": "What the extension sent on Finish: timings, every stroke, pin and click, the pill's position and the target window. It's what makes Retry possible: a failed build is rebuilt from it and the recordings, and the capture gets another day."
+  },
+  "b-summary": {
+    "name": "summary.md",
+    "role": "the cover letter",
+    "text": "The numbered notes with timestamps, e.g. \"- #1 (0:04) “This footer has too much text.”\". Clicks nobody spoke about are listed unnumbered as [clicked]. This is the text Ctrl+V pastes first."
+  },
+  "b-sheet": {
+    "name": "contact-sheet.png",
+    "role": "the photo sheet",
+    "text": "The cropped keyframes in rows of two, in note order, with number badges. Each keyframe is taken 0.1 s after a stroke ends (or a click or pin lands), with the annotations drawn on. This is the image the second paste delivers."
+  },
+  "b-mp4": {
+    "name": "recording.mp4",
+    "role": "the raw picture tape",
+    "text": "The screen recording, H.264 at 30 fps, converted by ffmpeg from GNOME's raw screencast."
+  },
+  "b-wav": {
+    "name": "audio.wav",
+    "role": "the raw sound tape",
+    "text": "The microphone, 16 kHz mono, written by pw-record from Start. It's the only file the optional API ever receives."
+  },
+  "b-frames": {
+    "name": "frames/ and frames-full/",
+    "role": "the stills",
+    "text": "One keyframe per mark: frames/ cropped to the activity (its bounding box plus 160 px, at least 640×400), frames-full/ uncropped, annotations burned in."
+  },
+  "b-json": {
+    "name": "sketchnote.json",
+    "role": "the production log",
+    "text": "Duration, offsets between the screen and mic clocks, every event, the target window, every word with its timestamps, and the marks the notes were built from."
+  }
+}
